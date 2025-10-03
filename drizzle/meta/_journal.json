@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1759526030542,
+      "tag": "0000_last_tag",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1759526203027,
+      "tag": "0001_lean_vapor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1759526649427,
+      "tag": "0002_clean_morbius",
+      "breakpoints": true
+    }
+  ]
+}
