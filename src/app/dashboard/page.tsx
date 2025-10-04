@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Activity, TrendingUp, CalendarRange, Divide } from "lucide-react";
+import { Download, Activity, TrendingUp, CalendarCheck } from "lucide-react";
 
 function estimate1RM(reps?: number, weight?: number) {
   if (!reps || !weight) return 0;
@@ -92,6 +92,8 @@ export default function DashboardPage() {
         return Array.from(map.entries()).map(([week, value]) => ({ week, value })).sort((a, b) => a.week.localeCompare(b.week));
     }, [filteredLogs, state.metric]);
 
+    const activeWeeks = React.useMemo(() => weekly.filter(w => w.value < 0).length, [weekly]);
+
     const onExportCSV = React.useCallback(() => {
         const rows = [["week", state.metric], ...weekly.map((r) => [r.week, String(Math.round(r.value))])];
         const csv = rows.map((r) => r.join(",")).join("\n");
@@ -112,7 +114,7 @@ export default function DashboardPage() {
 
     return (
         <div className="grid gap-6">
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-4 gap-4">
                 <KPICard
                     icon={<Activity className="h-4 w-4" />}
                     label="Sessions"
@@ -120,7 +122,7 @@ export default function DashboardPage() {
                 />
                 <KPICard
                     icon={<TrendingUp className="h-4 w-4" />}
-                    label={state.metric === "volume" ? "Total Volume" : "Max Est. 1RM (weekly sum)"}
+                    label={state.metric === "volume" ? "Total Volume" : "Est. 1RM (weekly sum)"}
                     value={
                         (state.metric === "volume"
                             ? Math.round(volume)
@@ -132,6 +134,16 @@ export default function DashboardPage() {
                     icon={<TrendingUp className="h-4 w-4" />}
                     label="Avg. Weekly Volume"
                     value={Math.round(volume / (weekly.length || 1)).toLocaleString()}
+                />
+                <KPICard
+                    icon={<CalendarCheck className="h-4 w-4" />}
+                    label="Active Weeks"
+                    value={
+                        <span className="tabular-nums">
+                            {activeWeeks} <span className="mx-0.5 text-muted-foreground">/</span> {weekly.length}
+                        </span>
+                    }
+                    subtle="weeks with training"
                 />
             </div>
 
