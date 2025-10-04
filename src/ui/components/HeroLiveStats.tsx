@@ -42,17 +42,17 @@ export default async function HeroLiveStats() {
     }
 
     return (
-        <div>
-            <div>
+        <div className="mt-5 flex flex-wrap items-center gap-4">
+            <div className="text-sm text-muted-foreground">
                 <span>{exCount ?? 0} exercises</span>
-                <span>•</span>
+                <span className="mx-2">•</span>
                 <span>{logCount ?? 0} logs</span>
             </div>
 
-            <span aria-hidden>•</span>
+            <span aria-hidden className="hidden sm:inline text-muted-foreground">•</span>
 
-            <div>
-                <span>Last 30 days volume</span>
+            <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">Last 30 days volume</span>
                 <InlineSparkline data={spark} />
             </div>
         </div>
