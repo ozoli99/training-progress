@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dumbbell, LineChart, PlusCircle } from "lucide-react";
+import HeroLiveStats from "@/ui/components/HeroLiveStats";
 
 export default function Home() {
   return (
@@ -9,6 +10,9 @@ export default function Home() {
       <section className="rounded-2xl border bg-gradient-to-b from-muted/60 to-background p-8 md:p-12">
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Visualize your training. Improve with data.</h1>
         <p className="mt-2 text-muted-foreground max-w-2xl">Log daily workouts and see progress across exercises - volume, best sets, and estimated 1RM.</p>
+        
+        <HeroLiveStats />
+
         <div className="mt-6 flex gap-3">
           <Button asChild>
             <Link href="/log">
