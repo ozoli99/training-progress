@@ -32,11 +32,11 @@ export function ExerciseCreateDialog() {
                     onSubmit={v => mutation.mutate(v)}
                 >
                     {({ errors, handleSubmit, setFieldValue, values }) => (
-                        <Form onSubmit={handleSubmit}>
+                        <Form onSubmit={handleSubmit} className="grid gap-3">
                             <div>
                                 <Label>Name</Label>
                                 <Field as={Input} name="name" placeholder="Back Squat" />
-                                {errors.name && <p>{String(errors.name)}</p>}
+                                {errors.name && <p className="text-sm text-red-500">{String(errors.name)}</p>}
                             </div>
                             <div>
                                 <Label>Unit</Label>

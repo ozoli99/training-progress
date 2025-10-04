@@ -11,21 +11,21 @@ export default function ExercisesPage() {
     });
 
     return (
-        <div>
-            <div>
-                <h2>Exercises</h2>
+        <div className="grid gap-4">
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Exercises</h2>
                 <ExerciseCreateDialog />
             </div>
 
-            <div>
+            <div className="grid gap-2">
                 {data.map((exercise: any) => (
                     <Card key={exercise.id}>
-                        <CardContent>
+                        <CardContent className="p-4 flex items-center justify-between">
                             <div>
-                                <div>{exercise.name}</div>
-                                <div>{exercise.unit}</div>
+                                <div className="font-medium">{exercise.name}</div>
+                                <div className="text-xs text-muted-foreground">{exercise.unit}</div>
                             </div>
-                            <a href={`/exercises/${exercise.id}`}>Open</a>
+                            <a href={`/exercises/${exercise.id}`} className="underline text-sm">Open</a>
                         </CardContent>
                     </Card>
                 ))}

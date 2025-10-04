@@ -19,9 +19,9 @@ export default function ExerciseDetailPage() {
     });
 
     return (
-        <div>
-            <h2>Exercise Trend</h2>
-            <div>Sessions: {logs.length}</div>
+        <div className="grid gap-4">
+            <h2 className="text-xl font-semibold">Exercise Trend</h2>
+            <div className="text-sm text-muted-foreground">Sessions: {logs.length}</div>
             {/* TODO: Add chart 1RM over time + table of sets */}
         </div>
     )
