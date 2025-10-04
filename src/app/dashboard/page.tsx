@@ -25,14 +25,14 @@ export default function DashboardPage() {
     const weekly = groupByWeek(logs);
 
     return (
-        <div>
-            <div>
-                <Card><CardContent><div>Sessions</div><div>{sessions}</div></CardContent></Card>
-                <Card><CardContent><div>Total Volume</div><div>{Math.round(volume)}</div></CardContent></Card>
-                <Card><CardContent><div>Range</div><div>{state.start} → {state.end}</div></CardContent></Card>
+        <div className="grid gap-6">
+            <div className="grid sm:grid-cols-3 gap-4">
+                <Card><CardContent className="p-4"><div className="text-sm text-muted-foreground">Sessions</div><div className="text-2xl font-semibold">{sessions}</div></CardContent></Card>
+                <Card><CardContent className="p-4"><div className="text-sm text-muted-foreground">Total Volume</div><div className="text-2xl font-semibold">{Math.round(volume)}</div></CardContent></Card>
+                <Card><CardContent className="p-4"><div className="text-sm text-muted-foreground">Range</div><div className="text-2xl font-semibold">{state.start} → {state.end}</div></CardContent></Card>
             </div>
 
-            <div>
+            <div className="grid sm:grid-cols-3 gap-4 items-end">
                 <div>
                     <Label>Start</Label>
                     <Input type="date" value={state.start} onChange={e => dispatch({ type: "range", start: e.target.value, end: state.end })} />
@@ -44,17 +44,17 @@ export default function DashboardPage() {
                 <div>
                     <Label>Metric</Label>
                     <Tabs value={state.metric} onValueChange={v => dispatch({ type: "metric", metric: v as any })}>
-                        <TabsList>
-                            <TabsTrigger value="volume">Volume</TabsTrigger>
-                            <TabsTrigger value="one_rep_max">Est. 1RM</TabsTrigger>
+                        <TabsList className="w-full">
+                            <TabsTrigger value="volume" className="flex-1">Volume</TabsTrigger>
+                            <TabsTrigger value="one_rep_max" className="flex-1">Est. 1RM</TabsTrigger>
                         </TabsList>
                     </Tabs>
                 </div>
             </div>
 
             <Card>
-                <CardContent>
-                    {isLoading ? <div /> : <WeeklyVolumeChart data={weekly} />}
+                <CardContent className="p-4">
+                    {isLoading ? <div className="h-64 animate-pulse bg-muted rounded-xl" /> : <WeeklyVolumeChart data={weekly} />}
                 </CardContent>
             </Card>
         </div>

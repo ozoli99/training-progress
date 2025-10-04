@@ -5,7 +5,7 @@ import * as React from "react";
 
 export function WeeklyVolumeChart({ data }: { data: { week: string; volume: number }[] }) {
     return (
-        <div>
+        <div className="h-64">
             <ResponsiveContainer>
                 <BarChart data={data}>
                     <CartesianGrid strokeDasharray="3 3" />
