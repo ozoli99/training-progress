@@ -35,19 +35,26 @@ export function LogForm() {
 
     return (
         <Card>
-            <CardContent>
-                <Formik<LogCreate> enableReinitialize initialValues={
-                    (typeof window !== "undefined" && localStorage.getItem(draftKey) ? JSON.parse(localStorage.getItem(draftKey)!) : { ...initial, exerciseId: exercises?.[0]?.id ?? "" }) as LogCreate
-                } validate={validate} onSubmit={async (values, helpers) => {
-                    const res = await fetch("/api/logs", { method: "POST", body: JSON.stringify(values) });
-                    if (res.ok) {
-                        localStorage.removeItem(draftKey);
-                        toast.success("Logged ✅", { description: "Your training entry was saved." });
-                        helpers.resetForm({ values: { ...values, notes: "" } });
-                    } else {
-                        toast.error("Validation failed", { description: "Check fields and try again." });
+            <CardContent className="p-6">
+                <Formik<LogCreate>
+                    enableReinitialize
+                    initialValues={
+                        (typeof window !== "undefined" && localStorage.getItem(draftKey)
+                            ? JSON.parse(localStorage.getItem(draftKey)!)
+                            : { ...initial, exerciseId: exercises?.[0]?.id ?? "" }) as LogCreate
                     }
-                }}>
+                    validate={validate}
+                    onSubmit={async (values, helpers) => {
+                        const res = await fetch("/api/logs", { method: "POST", body: JSON.stringify(values) });
+                        if (res.ok) {
+                            localStorage.removeItem(draftKey);
+                            toast.success("Logged ✅", { description: "Your training entry was saved." });
+                            helpers.resetForm({ values: { ...values, notes: "" } });
+                        } else {
+                            toast.error("Validation failed", { description: "Check fields and try again." });
+                        }
+                    }}
+                >
                     {({ values, errors, setFieldValue }) => {
                         useEffect(() => {
                             const id = setTimeout(() => localStorage.setItem(draftKey, JSON.stringify(values)), 400);
@@ -55,12 +62,12 @@ export function LogForm() {
                         }, [values]);
 
                         return (
-                            <Form>
-                                <div>
+                            <Form className="grid gap-4">
+                                <div className="grid sm:grid-cols-3 gap-4">
                                     <div>
-                                        <Label>Date</Label>
+                                        <Label htmlFor="date">Date</Label>
                                         <Input id="date" type="date" name="date" value={values.date} onChange={e => setFieldValue("date", e.target.value)} />
-                                        {errors.date && <p>{String(errors.date)}</p>}
+                                        {errors.date && <p className="text-sm text-red-500 mt-1">{String(errors.date)}</p>}
                                     </div>
                                     <div>
                                         <Label>Exercise</Label>
@@ -72,39 +79,39 @@ export function LogForm() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        {errors.exerciseId && <p>{String(errors.exerciseId)}</p>}
+                                        {errors.exerciseId && <p className="text-sm text-red-500 mt-1">{String(errors.exerciseId)}</p>}
                                     </div>
-                                    <div>
-                                        <Button type="submit">Save</Button>
+                                    <div className="self-end">
+                                        <Button type="submit" className="w-full">Save</Button>
                                     </div>
                                 </div>
 
                                 <FieldArray name="sets">
                                     {({ push, remove }) => (
-                                        <div>
-                                            <div>
+                                        <div className="grid gap-2">
+                                            <div className="flex items-center justify-between">
                                                 <Label>Sets</Label>
                                                 <Button type="button" variant="secondary" onClick={() => push({ reps: 5, weight: 50 })}>Add set</Button>
                                             </div>
                                             {values.sets.map((s, i) => (
-                                                <div key={i}>
-                                                    <div>
+                                                <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                                                    <div className="col-span-3">
                                                         <Label>Reps</Label>
                                                         <Field as={Input} name={`sets.${i}.reps`} type="number" min={1} />
                                                     </div>
-                                                    <div>
+                                                    <div className="col-span-3">
                                                         <Label>Weight</Label>
                                                         <Field as={Input} name={`sets.${i}.weight`} type="number" min={0} step="0.5" />
                                                     </div>
-                                                    <div>
+                                                    <div className="col-span-3">
                                                         <Label>Time (sec)</Label>
                                                         <Field as={Input} name={`sets.${i}.timeSec`} type="number" min={0} />
                                                     </div>
-                                                    <div>
+                                                    <div className="col-span-2">
                                                         <Label>RPE</Label>
                                                         <Field as={Input} name={`sets.${i}.rpe`} type="number" min={1} max={10} step="0.5" />
                                                     </div>
-                                                    <div>
+                                                    <div className="col-span-1">
                                                         <Button type="button" variant="ghost" onClick={() => remove(i)}>✕</Button>
                                                     </div>
                                                 </div>
