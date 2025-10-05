@@ -32,6 +32,7 @@ export function TrendChart({
     showAverage?: boolean;
     emphasizePR?: boolean;
 }) {
+    console.log(unit)
     const isBar = metric === "volume";
     const gradId = React.useId();
     const lineGradId = React.useId();
@@ -68,6 +69,7 @@ export function TrendChart({
             aria-label={metric === "one_rm" ? "Estimated 1RM trend" : unit === "time" ? "Total time trend" : "Volume trend"}
         >
             <ResponsiveContainer>
+                {/* extract the 2 charts into separate components */}
                 {isBar ? (
                     <BarChart
                         data={series}
@@ -184,9 +186,10 @@ export function TrendChart({
                                             })}
                                         </div>
                                         <div className="mt-1 text-sm font-medium">
-                                            {Math.round(v).toLocaleString()} <span className="text-muted-foreground">kg (est. 1RM)</span>
+                                            {Math.round(v).toLocaleString()} <span className="text-muted-foreground">{unit === "time" ? "sec" : "kg·reps"}</span>
                                         </div>
                                         <div className="mt-1 text-xs">
+                                            {/* todo: swap colors for unit time */}
                                             <span className={up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
                                                 {up ? "▲" : "▼"} {Math.abs(Math.round(delta)).toLocaleString()}
                                             </span>{" "}

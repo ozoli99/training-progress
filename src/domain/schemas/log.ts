@@ -11,7 +11,7 @@ const setSchema = z.object({
 
 export const logCreateSchema = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD format"),
-    exerciseId: z.string(),
+    exerciseId: z.string().min(1, "Exercise is required"),
     notes: z.string().max(500).optional(),
     sets: z.array(setSchema).min(1, "At least one set is required"),
 });

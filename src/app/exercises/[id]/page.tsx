@@ -67,6 +67,7 @@ export default function ExerciseDetailPage() {
 
     const derivedName = logs[0]?.exercise?.name ?? "Exercise";
     const unit: Unit = logs[0]?.exercise?.unit ?? "weight_reps";
+    console.log({unit})
     const meta = unitMeta(unit);
 
     const series = React.useMemo(() => {
@@ -140,9 +141,9 @@ export default function ExerciseDetailPage() {
                 </div>
                 <div className="md:col-span-6">
                     <Label>Metric</Label>
-                    <Tabs value={metric} onValueChange={(v) => setMetric(v as any)}>
+                    <Tabs value={metric} onValueChange={(v) => setMetric(v as "volume" | "one_rm")}>
                         <TabsList className="w-full">
-                            <TabsTrigger value="one_rm" className="flex-1" disabled={unit === "time"}>Est. 1RM</TabsTrigger>
+                            <TabsTrigger value="one_rm" className="flex-1">Est. 1RM</TabsTrigger>
                             <TabsTrigger value="volume" className="flex-1">{unit === "time" ? "Total Time" : "Volume"}</TabsTrigger>
                         </TabsList>
                     </Tabs>

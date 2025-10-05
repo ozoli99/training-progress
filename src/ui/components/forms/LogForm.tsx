@@ -24,7 +24,8 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 export function LogForm() {
     const queryClient = useQueryClient();
-
+    
+    // todo: extract to custom hook, see log.ts for reference
     const { data: exercises, isLoading: loadingExercises } = useQuery<Exercise[]>({
         queryKey: ["exercises"],
         queryFn: async () => (await fetch("/api/exercises")).json(),
@@ -38,11 +39,13 @@ export function LogForm() {
         date: ymd(),
         exerciseId: firstExId,
         notes: "",
+        // make this an empty array to force user to think about sets
         sets: [{ reps: 5, weight: 50 }],
     }), [firstExId]);
 
     const validate = makeZodFormikValidate(logCreateSchema);
 
+    // todo: extract to custom hook, see log.ts for reference
     const createLog = useMutation({
         mutationFn: async (payload: LogCreate) => {
             const res = await fetch("/api/logs", {
@@ -98,7 +101,8 @@ export function LogForm() {
                     }
                 }}
             >
-                {({ values, errors, setFieldValue, isSubmitting }) => {
+                {({ values, errors, setFieldValue, setFieldTouched, isValid, touched, isSubmitting }) => {
+                    // todo invesgate if this can remain in jsx
                     useEffect(() => {
                         if (!mounted) {
                             return;
@@ -133,7 +137,13 @@ export function LogForm() {
                                 </div>
                                 <div>
                                     <Label>Exercise</Label>
-                                    <Select value={values.exerciseId} onValueChange={(v) => setFieldValue("exerciseId", v)}>
+                                    <Select value={values.exerciseId} name="exerciseId"
+                                        onOpenChange={(open) => {
+        if (!open) setFieldTouched("exerciseId", true);
+    }}
+ onValueChange={(v) => {
+        setFieldValue("exerciseId", v);
+    }}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Pick exercise" />
                                         </SelectTrigger>
@@ -143,10 +153,10 @@ export function LogForm() {
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    {errors.exerciseId && <p className="text-sm text-red-500 mt-1">{String(errors.exerciseId)}</p>}
+                                    {errors.exerciseId && touched.exerciseId && <p className="text-sm text-red-500 mt-1">{String(errors.exerciseId)}</p>}
                                 </div>
                                 <div className="self-end flex items-center gap-2">
-                                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                                    <Button type="submit" className="w-full" disabled={isSubmitting || !isValid || Object.keys(touched).length === 0}>
                                         {isSubmitting ? (
                                             <>
                                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -180,6 +190,7 @@ export function LogForm() {
                                     </>
                                 )}
                             </div>
+                            {/* TODO: when there is no exercise selected hide set array */}
 
                             <FieldArray name="sets">
                                 {({ push, remove }) => (

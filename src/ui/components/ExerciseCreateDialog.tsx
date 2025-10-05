@@ -38,19 +38,17 @@ export function ExerciseCreateDialog({ open, onOpenChange, onCreated }: { open?:
 
     const validate = makeZodFormikValidate(exerciseCreateSchema);
 
-    const DialogRoot = (props: any) => typeof open === "boolean" ? (<Dialog open={open} onOpenChange={onOpenChange} {...props} />) : (<Dialog {...props} />);
-
     return (
-        <DialogRoot>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Create Exercise</DialogTitle>
                     <DialogDescription>Choose a clear, specific name and how you’ll track it.</DialogDescription>
                 </DialogHeader>
-
                 <Formik<ExerciseCreate>
                     initialValues={{ name: "", unit: "weight_reps" }}
                     validate={validate}
+                    // TODO handle submit
                     onSubmit={(v, helpers) => {
                         mutation.mutate(v, {
                             onSuccess: () => helpers.resetForm({ values: { name: "", unit: "weight_reps" } }),
@@ -61,7 +59,7 @@ export function ExerciseCreateDialog({ open, onOpenChange, onCreated }: { open?:
                         <Form onSubmit={handleSubmit} className="grid gap-4">
                             <div>
                                 <Label htmlFor="name">Name</Label>
-                                <Field as={Input} id="name" name="name" placeholder="Back Squat" autoFocus />
+                                <Field as={Input} id="name" name="name" placeholder="Back Squat" />
                                 {errors.name && (
                                     <p className="text-sm text-red-500 mt-1">{String(errors.name)}</p>
                                 )}
@@ -102,6 +100,6 @@ export function ExerciseCreateDialog({ open, onOpenChange, onCreated }: { open?:
                     )}
                 </Formik>
             </DialogContent>
-        </DialogRoot>
+        </Dialog>
     );
 }
