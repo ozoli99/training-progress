@@ -1,7 +1,5 @@
 "use client";
 
-import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTrainingFilters } from "@/ui/hooks/useTrainingFilters";
 import { WeeklyVolumeChart } from "@/ui/components/charts/WeeklyVolumeChart";
@@ -12,8 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Activity, TrendingUp, CalendarCheck } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { useGetLogs } from "@/components/hooks/api/logs";
+import { Toggle } from "@/components/ui/toggle";
 
-function estimate1RM(reps?: number, weight?: number) {
+function estimate1RM(reps?: number | null, weight?: number | null) {
   if (!reps || !weight) return 0;
   return weight * (1 + reps / 30);
 }
@@ -36,65 +37,59 @@ export default function DashboardPage() {
     const { state, dispatch } = useTrainingFilters();
     const safeRange = clampRange(state.start, state.end);
 
-    const { data: logs = [], isLoading, isError, error } = useQuery({
-        queryKey: ["logs", safeRange],
-        queryFn: async () => {
-            const url = `/api/logs?start=${safeRange.start}&end=${safeRange.end}`;
-            const res = await fetch(url);
-            if (!res.ok) {
-                throw new Error(`Failed to fetch: ${res.status}`);
-            }
-            return (await res.json()) as any[];
-        },
-        staleTime: 10_000,
-    });
+    const { data: logs = [], isLoading, isError, error } = useGetLogs(safeRange);
 
-    const exerciseOptions = React.useMemo(() => {
-        const map = new Map<string, string>();
-        for (const log of logs) {
-            const name = log?.exercise?.name as string | undefined;
-            if (name) {
-                map.set(log.exerciseId, name);
-            }
-        }
-        const items = Array.from(map, ([id, name]) => ({ id, name }));
-        return [{ id: "all", name: "All Exercises" }, ...items];
+    const exerciseOptions = useMemo(() => {
+        const items = logs
+            .map(log => ({
+                id: log.exerciseId,
+                name: log.exercise?.name,
+            }))
+            .filter((i): i is { id: string; name: string } => Boolean(i.id && i.name));
+        const uniqueItems = items.filter(
+            (item, index, self) =>
+                self.findIndex(i => i.id === item.id) === index
+        );
+        return [{ id: "all", name: "All Exercises" }, ...uniqueItems];
     }, [logs]);
 
-    const [exerciseId, setExerciseId] = React.useState<string>("all");
+    const [exerciseId, setExerciseId] = useState<string>("all");
 
-    const filteredLogs = React.useMemo(() => (
+    const filteredLogs = useMemo(() => (
         exerciseId === "all" ? logs : logs.filter(log => log.exerciseId === exerciseId)
     ), [logs, exerciseId]);
 
     const { sessions, volume } = useKPIs(filteredLogs);
 
-    const weekly = React.useMemo(() => {
-        const map = new Map<string, number>();
-        for (const log of filteredLogs) {
-            const week = weekKey(log.date);
-            let val = 0;
-            if (state.metric === "volume") {
-                for (const s of log.sets ?? []) {
-                    if (s.reps && s.weight) {
-                        val += s.reps * s.weight;
+    const weekly = useMemo(() => {
+        const logsByWeek = filteredLogs.reduce<Record<string, typeof filteredLogs>>((acc, log) => {
+            const weekStartDate = weekKey(log.date || "");
+            acc[weekStartDate] = acc[weekStartDate] ? [...acc[weekStartDate], log] : [log];
+            return acc;
+        }, {});
+
+        return Object.entries(logsByWeek)
+            .map(([weekStartDate, logsInWeek]) => {
+                const aggregatedValue = logsInWeek.reduce((total, log) => {
+                    if (state.metric === "volume") {
+                        return total + (log.sets ?? []).reduce((setTotal, set) =>
+                            setTotal + ((set.reps && set.weight) ? set.reps * set.weight : 0), 0);
+                    } else {
+                        const best1RM = (log.sets ?? []).reduce((max1RM, set) =>
+                            Math.max(max1RM, estimate1RM(set.reps, set.weight)), 0);
+                        return total + best1RM;
                     }
-                }
-            } else {
-                let best = 0;
-                for (const s of log.sets ?? []) {
-                    best = Math.max(best, estimate1RM(s.reps, s.weight));
-                }
-                val = best;
-            }
-            map.set(week, (map.get(week) ?? 0) + val);
-        }
-        return Array.from(map.entries()).map(([week, value]) => ({ week, value })).sort((a, b) => a.week.localeCompare(b.week));
+                }, 0);
+                return { week: weekStartDate, value: aggregatedValue };
+            })
+            .sort((a, b) => a.week.localeCompare(b.week));
     }, [filteredLogs, state.metric]);
 
-    const activeWeeks = React.useMemo(() => weekly.filter(w => w.value < 0).length, [weekly]);
+    const activeWeeks = useMemo(() => {
+        return weekly.filter(w => w.value > 0).length
+    }, [weekly]);
 
-    const onExportCSV = React.useCallback(() => {
+    const onExportCSV = useCallback(() => {
         const rows = [["week", state.metric], ...weekly.map((r) => [r.week, String(Math.round(r.value))])];
         const csv = rows.map((r) => r.join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -140,7 +135,7 @@ export default function DashboardPage() {
                     label="Active Weeks"
                     value={
                         <span className="tabular-nums">
-                            {activeWeeks} <span className="mx-0.5 text-muted-foreground">/</span> {weekly.length}
+                            {activeWeeks} <span className="mx-0.5 text-muted-foreground">/</span> {state.numberOfWeeks}
                         </span>
                     }
                     subtle="weeks with training"
@@ -180,9 +175,30 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="md:col-span-9 flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => applyPreset(28)}>Last 4 weeks</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyPreset(56)}>Last 8 weeks</Button>
-                    <Button size="sm" variant="outline" onClick={() => applyPreset(84)}>Last 12 weeks</Button>
+                    <Toggle
+                        size="sm"
+                        variant="outline"
+                        pressed={state.numberOfWeeks === 4}
+                        onClick={() => applyPreset(28)}
+                    >
+                        Last 4 weeks
+                    </Toggle>
+                    <Toggle
+                        size="sm"
+                        variant="outline"
+                        pressed={state.numberOfWeeks === 8}
+                        onClick={() => applyPreset(56)}
+                    >
+                        Last 8 weeks
+                    </Toggle>
+                    <Toggle
+                        size="sm"
+                        variant="outline"
+                        pressed={state.numberOfWeeks === 12}
+                        onClick={() => applyPreset(84)}
+                    >
+                        Last 12 weeks
+                    </Toggle>
                 </div>
 
                 <div className="md:col-span-3 flex md:justify-end">
@@ -207,7 +223,7 @@ export default function DashboardPage() {
                         </div>
                     )}
                     {!isLoading && !isError && weekly.length > 0 && (
-                        <WeeklyVolumeChart data={weekly.map((w) => ({ week: w.week, volume: Math.round(w.value) }))} />
+                        <WeeklyVolumeChart data={weekly.map((w) => ({ week: w.week, volume: Math.round(w.value) }))} range={{ start: state.start, end: state.end }} />
                     )}
                 </CardContent>
             </Card>
@@ -215,7 +231,7 @@ export default function DashboardPage() {
     );
 }
 
-function weekKey(isoDate: string) {
+export function weekKey(isoDate: string) {
     const date = new Date(isoDate + "T00:00:00");
     const day = (date.getUTCDay() + 6) % 7;
     date.setUTCDate(date.getUTCDate() - day);
@@ -225,11 +241,7 @@ function weekKey(isoDate: string) {
 function KPICard({ icon, label, value, subtle }: { icon: React.ReactNode; label: string; value: React.ReactNode; subtle?: string }) {
     return (
         <Card
-            className={[
-                "relative transition-all",
-                "hover:-translate-y-0.5 hover:shadow-lg",
-                "focus-within:ring-2 focus-within:ring-primary/60",
-            ].join(" ")}
+            className="relative transition-all hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary/60"
         >
             <span
                 aria-hidden

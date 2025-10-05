@@ -1,20 +1,42 @@
 "use client";
 
-import * as React from "react";
+import { weekKey } from "@/app/dashboard/page";
+import { useId, useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Point = { week: string; volume: number };
+type WeeklyVolumeChartProps = { data: Point[]; range: { start: string; end: string }; height?: number; unit?: string };
 
-export function WeeklyVolumeChart({ data, height = 288, unit = "kg·reps" }: { data: Point[]; height?: number; unit?: string }) {
-    const gradId = React.useId();
+export function WeeklyVolumeChart({ data, range, height = 288, unit = "kg·reps" }: WeeklyVolumeChartProps) {
+    const gradId = useId();
 
-    const prevMap = React.useMemo(() => {
-        const map = new Map<string, number>();
-        for (let i = 1; i < data.length; i++) {
-            map.set(data[i].week, data[i - 1].volume);
-        }
-        return map;
-    }, [data]);
+    const weekKeysInRange: string[] = useMemo(() => {
+        const start = new Date(range.start);
+        const end = new Date(range.end);
+        const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        const days = Array.from({ length: diff + 1 }, (_, i) => {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            return d.toISOString().slice(0, 10);
+        });
+        return Array.from(
+            new Set(days.map(day => weekKey(day)))
+        );
+    }, [range.start, range.end]);
+
+    const displayData = useMemo(() => weekKeysInRange.map(week => {
+        const found = data.find(d => d.week === week);
+        return { week, volume: found ? found.volume : 0 };
+    }), [weekKeysInRange, data]);
+
+    const prevMap = useMemo(() =>
+        displayData.reduce((map, current, index, array) => {
+            if (index > 0) {
+                map.set(current.week, array[index - 1].volume);
+            }
+            return map;
+        }, new Map<string, number>()),
+    [displayData]);
 
     const tickFmt = (iso: string) => {
         const d = new Date(iso + "T00:00:00");
@@ -27,7 +49,7 @@ export function WeeklyVolumeChart({ data, height = 288, unit = "kg·reps" }: { d
         <div style={{ height }} className="w-full">
             <ResponsiveContainer>
                 <BarChart
-                    data={data}
+                    data={displayData}
                     margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
                     barCategoryGap={18}
                 >
