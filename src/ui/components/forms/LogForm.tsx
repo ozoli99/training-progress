@@ -35,7 +35,7 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 export function LogForm() {
   const queryClient = useQueryClient();
 
-  // todo: extract to custom hook, see log.ts for reference
+  // TODO: extract to custom hook, see log.ts for reference
   const { data: exercises, isLoading: loadingExercises } = useQuery<Exercise[]>(
     {
       queryKey: ["exercises"],
@@ -52,7 +52,7 @@ export function LogForm() {
       date: ymd(),
       exerciseId: firstExId,
       notes: "",
-      // make this an empty array to force user to think about sets
+      // TODO: make this an empty array to force user to think about sets
       sets: [{ reps: 5, weight: 50 }],
     }),
     [firstExId]
@@ -60,7 +60,7 @@ export function LogForm() {
 
   const validate = makeZodFormikValidate(logCreateSchema);
 
-  // todo: extract to custom hook, see log.ts for reference
+  // TODO: extract to custom hook, see log.ts for reference
   const createLog = useMutation({
     mutationFn: async (payload: LogCreate) => {
       const res = await fetch("/api/logs", {

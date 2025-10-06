@@ -1,6 +1,7 @@
 "use client";
 
 import { weekKey } from "@/app/dashboard/page";
+import { tickFmt } from "@/lib/utils";
 import { useId, useMemo } from "react";
 import {
   Bar,
@@ -11,20 +12,22 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { DefaultTooltip } from "./DefaultTooltip";
+import { Unit } from "@/lib/types";
 
 type Point = { week: string; volume: number };
 type WeeklyVolumeChartProps = {
   data: Point[];
   range: { start: string; end: string };
   height?: number;
-  unit?: string;
+  unit?: Unit;
 };
 
 export function WeeklyVolumeChart({
   data,
   range,
   height = 288,
-  unit = "kg·reps",
+  unit = "weight_reps",
 }: WeeklyVolumeChartProps) {
   const gradId = useId();
 
@@ -61,11 +64,6 @@ export function WeeklyVolumeChart({
       }, new Map<string, number>()),
     [displayData]
   );
-
-  const tickFmt = (iso: string) => {
-    const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
-  };
 
   const num = (n: number) => n.toLocaleString();
 
@@ -115,37 +113,15 @@ export function WeeklyVolumeChart({
           />
           <Tooltip
             cursor={false}
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) {
-                return null;
-              }
-              const v = Number(payload[0].value ?? 0);
-              const prev = prevMap.get(String(label)) ?? 0;
-              const delta = v - prev;
-              const up = delta >= 0;
-              return (
-                <div className="rounded-lg border bg-popover text-popover-foreground p-3 shadow-md">
-                  <div className="text-xs text-muted-foreground">
-                    Week of {tickFmt(String(label))}
-                  </div>
-                  <div className="mt-1 text-sm font-medium">
-                    {num(v)} <span>{unit}</span>
-                  </div>
-                  <div className="mt-1 text-xs">
-                    <span
-                      className={
-                        up
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-rose-600 dark:text-rose-400"
-                      }
-                    >
-                      {up ? "▲" : "▼"} {num(Math.abs(delta))}
-                    </span>{" "}
-                    vs prev week
-                  </div>
-                </div>
-              );
-            }}
+            content={(props) => (
+              <DefaultTooltip
+                {...props}
+                unit={unit}
+                isOneRm={false}
+                prevMap={prevMap}
+                weekly={true}
+              />
+            )}
           />
           <Bar
             dataKey="volume"
