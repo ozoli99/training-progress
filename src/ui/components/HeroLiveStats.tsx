@@ -5,6 +5,22 @@ import InlineSparkline from "./InlineSparkline";
 
 type SparkPoint = { x: string; y: number };
 
+type Log = {
+  date: string;
+  id: string;
+  createdAt: Date;
+  exerciseId: string;
+  notes: string | null;
+  sets: {
+    id: string;
+    sessionLogId: string;
+    reps: number | null;
+    weight: number | null;
+    timeSec: number | null;
+    rpe: number | null;
+  }[];
+};
+
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -27,16 +43,16 @@ export default async function HeroLiveStats() {
     with: { sets: true },
   });
 
-  const dayMap = new Map<string, number>();
-  for (const log of logs) {
-    let dayVol = 0;
-    for (const set of log.sets ?? []) {
-      if (set.reps && set.weight) {
-        dayVol += set.reps * set.weight;
-      }
-    }
-    dayMap.set(log.date, (dayMap.get(log.date) ?? 0) + dayVol);
-  }
+  const setVolume = (s: Log["sets"][number]) => (s.reps ?? 0) * (s.weight ?? 0);
+
+  const logVolume = (log: Log) =>
+    log.sets.reduce((sum, s) => sum + setVolume(s), 0);
+
+  const dayMap = logs.reduce<Map<string, number>>((map, log) => {
+    const vol = logVolume(log);
+    map.set(log.date, (map.get(log.date) ?? 0) + vol);
+    return map;
+  }, new Map());
 
   const spark: SparkPoint[] = [];
   const cursor = new Date(start);
