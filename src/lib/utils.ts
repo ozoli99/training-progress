@@ -42,3 +42,7 @@ export function computeDomain(values: number[]): [() => number, () => number] {
   const pad = range === 0 ? Math.max(1, max * 0.1 || 1) : range * 0.1;
   return [() => Math.max(0, Math.floor(min - pad)), () => Math.ceil(max + pad)];
 }
+
+export function isActive(pathname: string, href: string) {
+  return pathname === href || (href !== "/" && pathname.startsWith(href));
+}

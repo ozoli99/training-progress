@@ -2,7 +2,7 @@
 
 import { LINE_MARGIN, GRID_CLASS, AXIS_CLASS } from "@/lib/constants";
 import { SeriesPoint, Unit } from "@/lib/types";
-import { tickFmt, getVariant, fullDate } from "@/lib/utils";
+import { tickFmt } from "@/lib/utils";
 import { useId } from "react";
 import {
   ResponsiveContainer,
