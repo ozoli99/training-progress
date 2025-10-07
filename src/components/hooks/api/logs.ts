@@ -35,8 +35,8 @@ export type CreateLogDTO = {
 
 const queryKey = "logs";
 
-export const useGetLogs = (safeRange: RangeFilter) => {
-  return useQuery({
+export const useGetLogs = (safeRange: RangeFilter) =>
+  useQuery({
     queryKey: [queryKey, safeRange],
     queryFn: async () => {
       const url = `/api/logs?start=${safeRange.start}&end=${safeRange.end}`;
@@ -49,7 +49,6 @@ export const useGetLogs = (safeRange: RangeFilter) => {
     },
     staleTime: 10_000,
   });
-};
 
 export const useCreateLog = () => {
   const queryClient = useQueryClient();
