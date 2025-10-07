@@ -22,11 +22,19 @@ export const fullDate = (iso: string) =>
 
 export const num = (n: number) => Math.round(n).toLocaleString();
 
-export const unitLabel = (unit: Unit, isOneRm: boolean) =>
-  isOneRm ? "kg (est. 1RM)" : unit === "time" ? "sec" : "kg·reps";
+export const unitLabel = (unit: Unit, isOneRm: boolean) => {
+  switch (unit) {
+    case "time":
+      return isOneRm ? "sec (best)" : "sec";
+    case "reps":
+      return isOneRm ? "reps (max)" : "reps";
+    case "weight_reps":
+    default:
+      return isOneRm ? "kg (est. 1RM)" : "kg·reps";
+  }
+};
 
-// TODO: give better name
-export const getVariant = (up: boolean, unit: Unit) => {
+export const getTrendColor = (up: boolean, unit: Unit) => {
   const positive = "text-emerald-600 dark:text-emerald-400";
   const negative = "text-rose-600 dark:text-rose-400";
 

@@ -1,7 +1,21 @@
 "use client";
 
 import { Unit } from "@/lib/types";
-import { tickFmt, fullDate, num, unitLabel, getVariant } from "@/lib/utils";
+import { tickFmt, fullDate, num, unitLabel, getTrendColor } from "@/lib/utils";
+
+function formatSeconds(totalSec: number) {
+  if (!Number.isFinite(totalSec)) return "0:00";
+
+  const sign = totalSec < 0 ? "-" : "";
+  let s = Math.abs(Math.round(totalSec));
+  const h = Math.floor(s / 3600);
+  s %= 3600;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return h > 0
+    ? `${sign}${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+    : `${sign}${m}:${String(sec).padStart(2, "0")}`;
+}
 
 type Props = {
   active?: boolean;
@@ -28,7 +42,15 @@ export function DefaultTooltip({
   const v = Number(payload[0].value ?? 0);
   const prev = prevMap.get(labelStr) ?? 0;
   const delta = v - prev;
-  const up = delta >= 0;
+
+  const improved = unit === "time" ? delta >= 0 : delta <= 0;
+
+  const valueDisplay = unit === "time" ? formatSeconds(v) : num(v);
+  const deltaDisplay =
+    unit === "time" ? formatSeconds(Math.abs(delta)) : num(Math.abs(delta));
+
+  const timeDeltaWord =
+    unit === "time" ? (improved ? "slower" : "faster") : undefined;
 
   return (
     <div className="rounded-lg border bg-popover text-popover-foreground p-3 shadow-md">
@@ -36,16 +58,24 @@ export function DefaultTooltip({
         {weekly ? `Week of ${tickFmt(labelStr)}` : fullDate(labelStr)}
       </div>
       <div className="mt-1 text-sm font-medium">
-        {num(v)}{" "}
-        <span className="text-muted-foreground">
-          {unitLabel(unit, isOneRm)}
-        </span>
+        {valueDisplay}{" "}
+        {unit !== "time" && (
+          <span className="text-muted-foreground">
+            {unitLabel(unit, isOneRm)}
+          </span>
+        )}
       </div>
       <div className="mt-1 text-xs">
-        <span className={getVariant(up, unit)}>
-          {up ? "▲" : "▼"} {num(Math.abs(delta))}
+        <span className={getTrendColor(improved, unit)}>
+          {improved ? "▲" : "▼"} {deltaDisplay}
         </span>{" "}
-        vs prev{weekly ? " week" : ""}
+        {unit === "time" ? (
+          <>
+            {timeDeltaWord} vs prev{weekly ? " week" : ""}
+          </>
+        ) : (
+          <>vs prev{weekly ? " week" : ""}</>
+        )}
       </div>
     </div>
   );
