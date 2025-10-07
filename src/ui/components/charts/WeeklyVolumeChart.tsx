@@ -122,7 +122,7 @@ export function WeeklyVolumeChart({
             )}
           />
           <Bar
-            dataKey="volume"
+            dataKey="value"
             fill={`url(#${gradId})`}
             radius={[6, 6, 0, 0]}
             maxBarSize={32}
