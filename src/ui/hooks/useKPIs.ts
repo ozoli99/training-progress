@@ -1,17 +1,17 @@
 import { useMemo } from "react";
 
-export function useKPIs(logs: any[]) {
+type VolumeSet = { reps?: number | null; weight?: number | null };
+type VolumeLog = { sets?: VolumeSet[] | null };
+
+const setVolume = (set: VolumeSet) => (set.reps ?? 0) * (set.weight ?? 0);
+const logVolume = (log: VolumeLog) =>
+  (log.sets ?? []).reduce((sum, s) => sum + setVolume(s), 0);
+
+export function useKPIs<T extends VolumeLog>(logs: readonly T[] | undefined) {
   return useMemo(() => {
-    let sessions = 0;
-    let volume = 0;
-    for (const log of logs) {
-      sessions++;
-      for (const set of log.sets ?? []) {
-        if (set.reps && set.weight) {
-          volume += set.reps * set.weight;
-        }
-      }
-    }
-    return { sessions, volume };
+    const safe = logs ?? [];
+    const sessions = safe.length;
+    const volume = safe.reduce((sum, log) => sum + logVolume(log), 0);
+    return { sessions, volume } as const;
   }, [logs]);
 }

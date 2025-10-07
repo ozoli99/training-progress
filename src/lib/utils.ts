@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Unit } from "./types";
+import { Log } from "@/app/exercises/[id]/page";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -46,3 +47,34 @@ export function computeDomain(values: number[]): [() => number, () => number] {
 export function isActive(pathname: string, href: string) {
   return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
+
+export function ymd(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+export function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+export function clampRange(start: string, end: string) {
+  return new Date(start) <= new Date(end)
+    ? { start, end }
+    : { start: end, end: start };
+}
+
+export const estimate1RM = (reps?: number | null, weight?: number | null) =>
+  !reps || !weight ? 0 : weight * (1 + reps / 30);
+
+export const volumeOf = (log: Log) =>
+  log.sets.reduce(
+    (a, s) => a + (s.reps && s.weight ? s.reps * s.weight : 0),
+    0
+  );
+
+export const best1RMOf = (log: Log) =>
+  Math.max(0, ...log.sets.map((s) => estimate1RM(s.reps, s.weight)));
+
+export const totalTimeOf = (log: Log) =>
+  log.sets.reduce((a, s) => a + (s.timeSec ?? 0), 0);

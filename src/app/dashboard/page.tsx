@@ -19,27 +19,8 @@ import { Download, Activity, TrendingUp, CalendarCheck } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useGetLogs } from "@/components/hooks/api/logs";
 import { Toggle } from "@/components/ui/toggle";
-
-function estimate1RM(reps?: number | null, weight?: number | null) {
-  if (!reps || !weight) return 0;
-  return weight * (1 + reps / 30);
-}
-
-function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-function addDays(d: Date, n: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-function clampRange(start: string, end: string) {
-  return new Date(start) <= new Date(end)
-    ? { start, end }
-    : { start: end, end: start };
-}
+import { KPICard } from "@/ui/components/KPICard";
+import { addDays, clampRange, estimate1RM, ymd } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { state, dispatch } = useTrainingFilters();
@@ -313,43 +294,4 @@ export function weekKey(isoDate: string) {
   const day = (date.getUTCDay() + 6) % 7;
   date.setUTCDate(date.getUTCDate() - day);
   return date.toISOString().slice(0, 10);
-}
-
-function KPICard({
-  icon,
-  label,
-  value,
-  subtle,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-  subtle?: string;
-}) {
-  return (
-    <Card className="relative transition-all hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-primary/60">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
-      />
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-accent/30 text-accent-foreground">
-            {icon}
-          </span>
-          <div className="min-w-0">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-              {label}
-            </div>
-            <div className="mt-1 text-2xl font-semibold leading-tight">
-              {value}
-            </div>
-            {subtle && (
-              <div className="mt-1 text-xs text-muted-foreground">{subtle}</div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
