@@ -1,6 +1,5 @@
 "use client";
 
-import { SortDir } from "@/app/exercises/page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,15 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Unit } from "@/lib/types";
-import { ArrowUpDown, Plus, RefreshCcw } from "lucide-react";
-
-const UNIT_FILTERS: Array<{ value: Unit | "all"; label: string }> = [
-  { value: "all", label: "All units" },
-  { value: "weight_reps", label: "Weight × Reps" },
-  { value: "reps", label: "Reps" },
-  { value: "time", label: "Time" },
-];
+import { UNIT_FILTERS } from "@/lib/constants";
+import { SortDir, Unit } from "@/lib/types";
+import { ArrowUpDown, Plus } from "lucide-react";
 
 type Props = {
   q: string;

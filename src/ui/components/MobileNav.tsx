@@ -2,15 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { NavItem } from "@/lib/types";
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-export type NavItem = {
-  href: string;
-  label: string;
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
-};
 
 export function MobileNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();

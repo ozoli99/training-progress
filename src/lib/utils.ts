@@ -1,11 +1,14 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Unit } from "./types";
-import { Log } from "@/app/exercises/[id]/page";
+import { Unit, Metric, WeeklyPoint, Exercise, SortDir } from "./types";
+import { UNIT_LABELS } from "./constants";
+import { GetLogsDTO } from "@/components/hooks/api/logs";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 export const tickFmt = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
@@ -23,15 +26,7 @@ export const fullDate = (iso: string) =>
 export const num = (n: number) => Math.round(n).toLocaleString();
 
 export const unitLabel = (unit: Unit, isOneRm: boolean) => {
-  switch (unit) {
-    case "time":
-      return isOneRm ? "sec (best)" : "sec";
-    case "reps":
-      return isOneRm ? "reps (max)" : "reps";
-    case "weight_reps":
-    default:
-      return isOneRm ? "kg (est. 1RM)" : "kg·reps";
-  }
+  return isOneRm ? UNIT_LABELS[unit].oneRm : UNIT_LABELS[unit].volume;
 };
 
 export const getTrendColor = (up: boolean, unit: Unit) => {
@@ -56,7 +51,7 @@ export function isActive(pathname: string, href: string) {
   return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
 
-export function ymd(d: Date) {
+export function ymd(d: Date = new Date()) {
   return d.toISOString().slice(0, 10);
 }
 
@@ -72,17 +67,34 @@ export function clampRange(start: string, end: string) {
     : { start: end, end: start };
 }
 
-export const estimate1RM = (reps?: number | null, weight?: number | null) =>
-  !reps || !weight ? 0 : weight * (1 + reps / 30);
+export function formatSeconds(totalSec: number) {
+  if (!Number.isFinite(totalSec)) return "0:00";
 
-export const volumeOf = (log: Log) =>
-  log.sets.reduce(
-    (a, s) => a + (s.reps && s.weight ? s.reps * s.weight : 0),
-    0
-  );
+  const sign = totalSec < 0 ? "-" : "";
+  let s = Math.abs(Math.round(totalSec));
+  const h = Math.floor(s / 3600);
+  s %= 3600;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return h > 0
+    ? `${sign}${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+    : `${sign}${m}:${String(sec).padStart(2, "0")}`;
+}
 
-export const best1RMOf = (log: Log) =>
-  Math.max(0, ...log.sets.map((s) => estimate1RM(s.reps, s.weight)));
+export const isTimeUnit = (unit: Unit) => unit === "time";
 
-export const totalTimeOf = (log: Log) =>
-  log.sets.reduce((a, s) => a + (s.timeSec ?? 0), 0);
+export const isDeltaImproved = (delta: number, unit: Unit) =>
+  isTimeUnit(unit) ? delta < 0 : delta > 0;
+
+export const formatMetric = (value: number, unit: Unit, isOneRm: boolean) =>
+  isTimeUnit(unit) ? formatSeconds(value) : `${num(value)}${isOneRm ? "" : ""}`;
+
+export const formatDelta = (delta: number, unit: Unit) =>
+  isTimeUnit(unit) ? formatSeconds(Math.abs(delta)) : num(Math.abs(delta));
+
+export function weekKey(isoDate: string) {
+  const date = new Date(isoDate + "T00:00:00");
+  const day = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - day);
+  return date.toISOString().slice(0, 10);
+}

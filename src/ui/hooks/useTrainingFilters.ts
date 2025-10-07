@@ -1,12 +1,13 @@
 "use client";
 
+import { Metric } from "@/lib/types";
 import { useEffect, useReducer } from "react";
 
 type State = {
   start: string;
   end: string;
   numberOfWeeks: number;
-  metric: "volume" | "one_rep_max";
+  metric: Metric;
 };
 type Action =
   | { type: "range"; start: string; end: string }

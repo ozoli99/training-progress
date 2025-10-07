@@ -11,3 +11,16 @@ export const DEFAULT_SET_BY_UNIT: Record<Unit, Record<string, number>> = {
   reps: { reps: 8, rpe: 7 },
   weight_reps: { reps: 5, weight: 50, rpe: 8 },
 };
+
+export const UNIT_LABELS = {
+  weight_reps: { volume: "kg·reps", oneRm: "kg (est. 1RM)" },
+  reps: { volume: "reps", oneRm: "reps (best)" },
+  time: { volume: "sec", oneRm: "sec (best)" },
+} as const;
+
+export const UNIT_FILTERS: Array<{ value: Unit | "all"; label: string }> = [
+  { value: "all", label: "All units" },
+  { value: "weight_reps", label: "Weight × Reps" },
+  { value: "reps", label: "Reps" },
+  { value: "time", label: "Time" },
+];

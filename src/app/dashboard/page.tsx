@@ -20,7 +20,9 @@ import { useCallback, useMemo, useState } from "react";
 import { useGetLogs } from "@/components/hooks/api/logs";
 import { Toggle } from "@/components/ui/toggle";
 import { KPICard } from "@/ui/components/KPICard";
-import { addDays, clampRange, estimate1RM, ymd } from "@/lib/utils";
+import { addDays, clampRange, ymd } from "@/lib/utils";
+import { buildExerciseOptions, groupByWeek } from "@/lib/dashboard";
+import { exportWeeklyCSV } from "@/lib/csv";
 
 export default function DashboardPage() {
   const { state, dispatch } = useTrainingFilters();
@@ -28,20 +30,7 @@ export default function DashboardPage() {
 
   const { data: logs = [], isLoading, isError, error } = useGetLogs(safeRange);
 
-  const exerciseOptions = useMemo(() => {
-    const items = logs
-      .map((log) => ({
-        id: log.exerciseId,
-        name: log.exercise?.name,
-      }))
-      .filter((i): i is { id: string; name: string } =>
-        Boolean(i.id && i.name)
-      );
-    const uniqueItems = items.filter(
-      (item, index, self) => self.findIndex((i) => i.id === item.id) === index
-    );
-    return [{ id: "all", name: "All Exercises" }, ...uniqueItems];
-  }, [logs]);
+  const exerciseOptions = useMemo(() => buildExerciseOptions(logs), [logs]);
 
   const [exerciseId, setExerciseId] = useState<string>("all");
 
@@ -55,63 +44,20 @@ export default function DashboardPage() {
 
   const { sessions, volume } = useKPIs(filteredLogs);
 
-  const weekly = useMemo(() => {
-    const logsByWeek = filteredLogs.reduce<Record<string, typeof filteredLogs>>(
-      (acc, log) => {
-        const weekStartDate = weekKey(log.date || "");
-        acc[weekStartDate] = acc[weekStartDate]
-          ? [...acc[weekStartDate], log]
-          : [log];
-        return acc;
-      },
-      {}
-    );
+  const weekly = useMemo(
+    () => groupByWeek(filteredLogs, state.metric),
+    [filteredLogs, state.metric]
+  );
 
-    return Object.entries(logsByWeek)
-      .map(([weekStartDate, logsInWeek]) => {
-        const aggregatedValue = logsInWeek.reduce((total, log) => {
-          if (state.metric === "volume") {
-            return (
-              total +
-              (log.sets ?? []).reduce(
-                (setTotal, set) =>
-                  setTotal +
-                  (set.reps && set.weight ? set.reps * set.weight : 0),
-                0
-              )
-            );
-          } else {
-            const best1RM = (log.sets ?? []).reduce(
-              (max1RM, set) =>
-                Math.max(max1RM, estimate1RM(set.reps, set.weight)),
-              0
-            );
-            return total + best1RM;
-          }
-        }, 0);
-        return { week: weekStartDate, value: aggregatedValue };
-      })
-      .sort((a, b) => a.week.localeCompare(b.week));
-  }, [filteredLogs, state.metric]);
+  const activeWeeks = useMemo(
+    () => weekly.filter((w) => w.value > 0).length,
+    [weekly]
+  );
 
-  const activeWeeks = useMemo(() => {
-    return weekly.filter((w) => w.value > 0).length;
-  }, [weekly]);
-
-  const onExportCSV = useCallback(() => {
-    const rows = [
-      ["week", state.metric],
-      ...weekly.map((r) => [r.week, String(Math.round(r.value))]),
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `dashboard_${state.metric}_${safeRange.start}_${safeRange.end}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [weekly, state.metric, safeRange]);
+  const onExportCSV = useCallback(
+    () => exportWeeklyCSV(weekly, state.metric, safeRange.start, safeRange.end),
+    [weekly, state.metric, safeRange]
+  );
 
   const applyPreset = (days: number) => {
     const end = new Date();
@@ -278,7 +224,7 @@ export default function DashboardPage() {
             <WeeklyVolumeChart
               data={weekly.map((w) => ({
                 week: w.week,
-                volume: Math.round(w.value),
+                value: Math.round(w.value),
               }))}
               range={{ start: state.start, end: state.end }}
             />
@@ -287,11 +233,4 @@ export default function DashboardPage() {
       </Card>
     </div>
   );
-}
-
-export function weekKey(isoDate: string) {
-  const date = new Date(isoDate + "T00:00:00");
-  const day = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - day);
-  return date.toISOString().slice(0, 10);
 }

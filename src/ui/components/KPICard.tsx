@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 
-type KPICardProps = {
+type Props = {
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
@@ -10,13 +10,7 @@ type KPICardProps = {
   className?: string;
 };
 
-export function KPICard({
-  icon,
-  label,
-  value,
-  subtle,
-  className,
-}: KPICardProps) {
+export function KPICard({ icon, label, value, subtle, className }: Props) {
   return (
     <Card
       className={[

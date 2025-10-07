@@ -1,9 +1,8 @@
 "use client";
 
-import { Log } from "@/app/exercises/[id]/page";
 import { Card, CardContent } from "@/components/ui/card";
-import { Unit } from "@/lib/types";
-import { best1RMOf, totalTimeOf, volumeOf } from "@/lib/utils";
+import { best1RMOf, totalTimeOf, volumeOf } from "@/lib/training";
+import { Unit, Log } from "@/lib/types";
 import { useMemo } from "react";
 
 type Props = {

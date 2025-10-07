@@ -1,12 +1,6 @@
 import { Dumbbell, LineChart, PlusCircle } from "lucide-react";
 import { FeatureCard } from "./FeatureCard";
-
-type Feature = {
-  title: string;
-  description: string;
-  href: string;
-  icon: React.ReactNode;
-};
+import { Feature } from "@/lib/types";
 
 const FEATURES: Feature[] = [
   {

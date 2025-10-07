@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { NavItem } from "./MobileNav";
 import { isActive } from "@/lib/utils";
+import { NavItem } from "@/lib/types";
 
 type Props = {
   items: NavItem[];

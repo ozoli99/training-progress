@@ -1,26 +1,13 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import * as React from "react";
-
-const ResponsiveContainer = dynamic(
-  () => import("recharts").then((m) => m.ResponsiveContainer),
-  { ssr: false }
-);
-const LineChart = dynamic(() => import("recharts").then((m) => m.LineChart), {
-  ssr: false,
-});
-const Line = dynamic(() => import("recharts").then((m) => m.Line), {
-  ssr: false,
-});
-
-type Point = { x: string; y: number };
+import { SeriesPoint } from "@/lib/types";
+import { ResponsiveContainer, LineChart, Line } from "recharts";
 
 export default function InlineSparkline({
   data,
   className,
 }: {
-  data: Point[];
+  data: SeriesPoint[];
   className?: string;
 }) {
   const size = className ?? "h-16 w-56";

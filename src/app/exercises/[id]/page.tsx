@@ -2,56 +2,17 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
+import { useMemo, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendChart } from "@/ui/components/charts/TrendChart";
-import { useMemo, useState } from "react";
-import { Unit } from "@/lib/types";
-import { best1RMOf, totalTimeOf, volumeOf } from "@/lib/utils";
 import { KPI } from "@/ui/components/KPI";
 import { HeaderCard } from "@/ui/components/HeaderCard";
 import { Filters } from "@/ui/components/Filters";
 import { LogsTable } from "@/ui/components/LogsTable";
 
-type Exercise = { id: string; name: string; unit: Unit };
-
-export type Log = {
-  id: string;
-  exerciseId: string;
-  date: string;
-  exercise?: Exercise;
-  sets: Array<{
-    weight?: number;
-    reps?: number;
-    timeSec?: number;
-    rpe?: number;
-  }>;
-};
-
-export type Metric = "volume" | "one_rm";
-
-function makeSeries(logs: Log[], metric: Metric, unit: Unit) {
-  const sorted = [...logs].sort((a, b) => a.date.localeCompare(b.date));
-  return sorted.map((l) => ({
-    x: l.date,
-    y:
-      metric === "volume"
-        ? volumeOf(l)
-        : unit === "time"
-          ? totalTimeOf(l)
-          : best1RMOf(l),
-  }));
-}
-
-function driveKpis(logs: Log[], unit: Unit) {
-  const sessions = logs.length;
-  const totalVolume = logs.reduce((a, l) => a + volumeOf(l), 0);
-  const best1RM = Math.max(0, ...logs.map(best1RMOf));
-  const totalTime = logs.reduce((a, l) => a + totalTimeOf(l), 0);
-  const latest = logs[logs.length - 1];
-
-  return { sessions, totalVolume, best1RM, totalTime, latest, unit };
-}
+import { Log, Metric, Unit } from "@/lib/types";
+import { best1RMOf, driveKpis, makeSeries } from "@/lib/training";
 
 export default function ExerciseDetailPage() {
   const params = useParams<{ id: string }>();

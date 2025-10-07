@@ -2,9 +2,9 @@ import { db } from "@/infrastructure/db/client";
 import { exercises, sessionLogs } from "@/infrastructure/db/schema";
 import { sql } from "drizzle-orm";
 import InlineSparkline from "./InlineSparkline";
+import { SeriesPoint } from "@/lib/types";
 
-type SparkPoint = { x: string; y: number };
-
+// TODO: Fix the Log types
 type Log = {
   date: string;
   id: string;
@@ -54,7 +54,7 @@ export default async function HeroLiveStats() {
     return map;
   }, new Map());
 
-  const spark: SparkPoint[] = [];
+  const spark: SeriesPoint[] = [];
   const cursor = new Date(start);
   while (cursor <= end) {
     const key = ymd(cursor);

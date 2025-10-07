@@ -1,12 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { Cta } from "@/lib/types";
 import Link from "next/link";
-
-export type Cta = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  variant?: "default" | "secondary" | "ghost";
-};
 
 export function CtaButton({ href, label, icon, variant = "default" }: Cta) {
   return (

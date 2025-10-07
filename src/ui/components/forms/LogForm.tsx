@@ -20,13 +20,10 @@ import { useGetExercises } from "@/components/hooks/api/exercises";
 import { useCreateLog } from "@/components/hooks/api/logs";
 import { SummaryBar } from "./SummaryBar";
 import { SetList } from "./SetList";
+import { sum, ymd } from "@/lib/utils";
+import { estimate1RM } from "@/lib/training";
 
 const DRAFT_KEY = "logFormDraft";
-
-const ymd = (d = new Date()) => d.toISOString().slice(0, 10);
-const est1RM = (reps?: number, weight?: number) =>
-  !reps || !weight ? 0 : weight * (1 + reps / 30);
-const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 export function LogForm() {
   const { data: exercises = [], isLoading: loadingExercises } =
@@ -125,7 +122,9 @@ export function LogForm() {
           );
           const best1RM = Math.max(
             0,
-            ...values.sets.map((s) => est1RM(Number(s.reps), Number(s.weight)))
+            ...values.sets.map((s) =>
+              estimate1RM(Number(s.reps), Number(s.weight))
+            )
           );
           const totalSecs = sum(values.sets.map((s) => Number(s.timeSec ?? 0)));
 

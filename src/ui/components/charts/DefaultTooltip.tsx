@@ -1,21 +1,16 @@
 "use client";
 
 import { Unit } from "@/lib/types";
-import { tickFmt, fullDate, num, unitLabel, getTrendColor } from "@/lib/utils";
-
-function formatSeconds(totalSec: number) {
-  if (!Number.isFinite(totalSec)) return "0:00";
-
-  const sign = totalSec < 0 ? "-" : "";
-  let s = Math.abs(Math.round(totalSec));
-  const h = Math.floor(s / 3600);
-  s %= 3600;
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return h > 0
-    ? `${sign}${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-    : `${sign}${m}:${String(sec).padStart(2, "0")}`;
-}
+import {
+  tickFmt,
+  fullDate,
+  unitLabel,
+  getTrendColor,
+  isDeltaImproved,
+  formatMetric,
+  formatDelta,
+  isTimeUnit,
+} from "@/lib/utils";
 
 type Props = {
   active?: boolean;
@@ -43,14 +38,9 @@ export function DefaultTooltip({
   const prev = prevMap.get(labelStr) ?? 0;
   const delta = v - prev;
 
-  const improved = unit === "time" ? delta >= 0 : delta <= 0;
-
-  const valueDisplay = unit === "time" ? formatSeconds(v) : num(v);
-  const deltaDisplay =
-    unit === "time" ? formatSeconds(Math.abs(delta)) : num(Math.abs(delta));
-
-  const timeDeltaWord =
-    unit === "time" ? (improved ? "slower" : "faster") : undefined;
+  const isImproved = isDeltaImproved(delta, unit);
+  const isTime = isTimeUnit(unit);
+  const timeDeltaWord = isTime ? (isImproved ? "slower" : "faster") : undefined;
 
   return (
     <div className="rounded-lg border bg-popover text-popover-foreground p-3 shadow-md">
@@ -58,7 +48,7 @@ export function DefaultTooltip({
         {weekly ? `Week of ${tickFmt(labelStr)}` : fullDate(labelStr)}
       </div>
       <div className="mt-1 text-sm font-medium">
-        {valueDisplay}{" "}
+        {formatMetric(v, unit, isOneRm)}{" "}
         {unit !== "time" && (
           <span className="text-muted-foreground">
             {unitLabel(unit, isOneRm)}
@@ -66,10 +56,10 @@ export function DefaultTooltip({
         )}
       </div>
       <div className="mt-1 text-xs">
-        <span className={getTrendColor(improved, unit)}>
-          {improved ? "▲" : "▼"} {deltaDisplay}
+        <span className={getTrendColor(isImproved, unit)}>
+          {isImproved ? "▲" : "▼"} {formatDelta(delta, unit)}
         </span>{" "}
-        {unit === "time" ? (
+        {isTime ? (
           <>
             {timeDeltaWord} vs prev{weekly ? " week" : ""}
           </>

@@ -1,7 +1,9 @@
 "use client";
 
+import { Unit } from "@/lib/types";
+
 type Props = {
-  unit: "weight_reps" | "time" | "reps";
+  unit: Unit;
   volume: number;
   best1RM: number;
   totalSecs: number;

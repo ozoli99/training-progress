@@ -5,7 +5,7 @@ import { SeriesPoint, Unit } from "@/lib/types";
 import { VolumeBarChart } from "./VolumeBarChart";
 import { OneRMLineChart } from "./OneRMLineChart";
 
-type TrendChartProps = {
+type Props = {
   series: SeriesPoint[];
   metric: "volume" | "one_rm";
   unit: Unit;
@@ -14,7 +14,7 @@ type TrendChartProps = {
   emphasizePR?: boolean;
 };
 
-export function TrendChart({ series, metric, unit }: TrendChartProps) {
+export function TrendChart({ series, metric, unit }: Props) {
   const isBar = metric === "volume";
 
   const yVals = series.map((p) => Number(p.y)).filter(Number.isFinite);

@@ -2,27 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { ExerciseCreateDialog } from "@/ui/components/ExerciseCreateDialog";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Unit } from "@/lib/types";
+import { Exercise, SortDir } from "@/lib/types";
 import { FiltersRow } from "@/ui/components/FiltersRow";
 import { ExerciseCard } from "@/ui/components/ExerciseCard";
 import { useGetExercises } from "@/components/hooks/api/exercises";
-
-type Exercise = {
-  id: string;
-  name: string;
-  unit: Unit;
-};
-
-export type SortDir = "asc" | "desc";
-
-function sortByName(a: Exercise, b: Exercise, dir: SortDir) {
-  return dir === "asc"
-    ? a.name.localeCompare(b.name)
-    : b.name.localeCompare(a.name);
-}
+import { sortByName } from "@/lib/sort";
 
 export default function ExercisesPage() {
   const { data = [], isLoading, isError, refetch } = useGetExercises();

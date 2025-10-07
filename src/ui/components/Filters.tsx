@@ -1,10 +1,9 @@
 "use client";
 
-import { Metric } from "@/app/exercises/[id]/page";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Unit } from "@/lib/types";
+import { Unit, Metric } from "@/lib/types";
 
 type Props = {
   start: string;

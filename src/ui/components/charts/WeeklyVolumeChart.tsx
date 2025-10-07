@@ -1,7 +1,6 @@
 "use client";
 
-import { weekKey } from "@/app/dashboard/page";
-import { tickFmt } from "@/lib/utils";
+import { num, tickFmt, weekKey } from "@/lib/utils";
 import { useId, useMemo } from "react";
 import {
   Bar,
@@ -13,11 +12,10 @@ import {
   YAxis,
 } from "recharts";
 import { DefaultTooltip } from "./DefaultTooltip";
-import { Unit } from "@/lib/types";
+import { Unit, WeeklyPoint } from "@/lib/types";
 
-type Point = { week: string; volume: number };
-type WeeklyVolumeChartProps = {
-  data: Point[];
+type Props = {
+  data: WeeklyPoint[];
   range: { start: string; end: string };
   height?: number;
   unit?: Unit;
@@ -28,7 +26,7 @@ export function WeeklyVolumeChart({
   range,
   height = 288,
   unit = "weight_reps",
-}: WeeklyVolumeChartProps) {
+}: Props) {
   const gradId = useId();
 
   const weekKeysInRange: string[] = useMemo(() => {
@@ -49,23 +47,23 @@ export function WeeklyVolumeChart({
     () =>
       weekKeysInRange.map((week) => {
         const found = data.find((d) => d.week === week);
-        return { week, volume: found ? found.volume : 0 };
+        return { week, value: found ? found.value : 0 };
       }),
     [weekKeysInRange, data]
   );
+
+  console.log({ displayData });
 
   const prevMap = useMemo(
     () =>
       displayData.reduce((map, current, index, array) => {
         if (index > 0) {
-          map.set(current.week, array[index - 1].volume);
+          map.set(current.week, array[index - 1].value);
         }
         return map;
       }, new Map<string, number>()),
     [displayData]
   );
-
-  const num = (n: number) => n.toLocaleString();
 
   return (
     <div style={{ height }} className="w-full">

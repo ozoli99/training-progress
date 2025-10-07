@@ -1,7 +1,8 @@
 import HeroLiveStats from "./HeroLiveStats";
 import { Dumbbell, LineChart, PlusCircle } from "lucide-react";
 import { BackgroundDots } from "./BackgroundDots";
-import { Cta, CtaButton } from "./CtaButton";
+import { CtaButton } from "./CtaButton";
+import { Cta } from "@/lib/types";
 
 const CTAs: Cta[] = [
   {
