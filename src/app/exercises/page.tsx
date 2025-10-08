@@ -1,12 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ExerciseCreateDialog } from "@/ui/components/ExerciseCreateDialog";
+import { ExerciseCreateDialog } from "@/components/ExerciseCreateDialog";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Exercise, SortDir } from "@/lib/types";
-import { FiltersRow } from "@/ui/components/FiltersRow";
-import { ExerciseCard } from "@/ui/components/ExerciseCard";
+import { FiltersRow } from "@/components/FiltersRow";
+import { ExerciseCard } from "@/components/ExerciseCard";
 import { useGetExercises } from "@/components/hooks/api/exercises";
 import { sortByName } from "@/lib/sort";
 

@@ -2,7 +2,7 @@
 
 import { Formik, Form, Field } from "formik";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { makeZodFormikValidate } from "@/ui/lib/zodFormik";
+import { makeZodFormikValidate } from "@/lib/zodFormik";
 import { logCreateSchema, type LogCreate } from "@/domain/schemas/log";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

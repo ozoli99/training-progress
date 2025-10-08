@@ -1,8 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Unit, Metric, WeeklyPoint, Exercise, SortDir } from "./types";
+import { Unit } from "./types";
 import { UNIT_LABELS } from "./constants";
-import { GetLogsDTO } from "@/components/hooks/api/logs";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

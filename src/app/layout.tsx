@@ -1,10 +1,10 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ThemeProvider } from "@/ui/theme/ThemeProvider";
-import { QueryProvider } from "@/ui/providers/QueryProvider";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
-import { AppHeader } from "@/ui/components/AppHeader";
+import { AppHeader } from "@/components/AppHeader";
 
 export const metadata: Metadata = {
   title: "Training Progress",

@@ -14,7 +14,7 @@ import {
   type ExerciseCreate,
 } from "@/domain/schemas/exercise";
 import { Formik, Form, Field } from "formik";
-import { makeZodFormikValidate } from "@/ui/lib/zodFormik";
+import { makeZodFormikValidate } from "@/lib/zodFormik";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {

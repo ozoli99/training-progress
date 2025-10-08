@@ -2,10 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import { Dumbbell, LineChart, PlusCircle } from "lucide-react";
-import { MobileNav } from "./MobileNav";
+import { MobileNav } from "@/components/MobileNav";
 import { Brand } from "./Brand";
 import { DesktopNav } from "./DesktopNav";
-import { QuickActions } from "./QuickActions";
+import { QuickActions } from "@/components/QuickActions";
 import { NavItem } from "@/lib/types";
 
 const NAV: NavItem[] = [

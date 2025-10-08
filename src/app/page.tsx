@@ -1,5 +1,5 @@
-import { HeroSection } from "@/ui/components/HeroSection";
-import { FeatureGrid } from "@/ui/components/FeatureGrid";
+import { HeroSection } from "@/components/HeroSection";
+import { FeatureGrid } from "@/components/FeatureGrid";
 
 export default function Home() {
   return (

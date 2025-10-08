@@ -1,9 +1,9 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { useTrainingFilters } from "@/ui/hooks/useTrainingFilters";
-import { WeeklyVolumeChart } from "@/ui/components/charts/WeeklyVolumeChart";
-import { useKPIs } from "@/ui/hooks/useKPIs";
+import { useTrainingFilters } from "@/components/hooks/useTrainingFilters";
+import { WeeklyVolumeChart } from "@/components/charts/WeeklyVolumeChart";
+import { useKPIs } from "@/components/hooks/useKPIs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { Download, Activity, TrendingUp, CalendarCheck } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useGetLogs } from "@/components/hooks/api/logs";
 import { Toggle } from "@/components/ui/toggle";
-import { KPICard } from "@/ui/components/KPICard";
+import { KPICard } from "@/components/KPICard";
 import { addDays, clampRange, ymd } from "@/lib/utils";
 import { buildExerciseOptions, groupByWeek } from "@/lib/dashboard";
 import { exportWeeklyCSV } from "@/lib/csv";

@@ -5,11 +5,11 @@ import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendChart } from "@/ui/components/charts/TrendChart";
-import { KPI } from "@/ui/components/KPI";
-import { HeaderCard } from "@/ui/components/HeaderCard";
-import { Filters } from "@/ui/components/Filters";
-import { LogsTable } from "@/ui/components/LogsTable";
+import { TrendChart } from "@/components/charts/TrendChart";
+import { KPI } from "@/components/KPI";
+import { HeaderCard } from "@/components/HeaderCard";
+import { Filters } from "@/components/Filters";
+import { LogsTable } from "@/components/LogsTable";
 
 import { Log, Metric, Unit } from "@/lib/types";
 import { best1RMOf, driveKpis, makeSeries } from "@/lib/training";
