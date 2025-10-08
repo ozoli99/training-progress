@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,41 +23,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useCreateExercise } from "./hooks/api/exercises";
 
 export function ExerciseCreateDialog({
   open,
   onOpenChange,
-  onCreated,
 }: {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onCreated?: () => void;
 }) {
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: async (payload: ExerciseCreate) => {
-      const res = await fetch("/api/exercises", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to create exercise");
-      }
-      return res.json();
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["exercises"] });
-      onCreated?.();
-      onOpenChange?.(false);
-    },
-    onError: () => toast.error("Failed to create exercise"),
-  });
-
+  const mutation = useCreateExercise();
   const validate = makeZodFormikValidate(exerciseCreateSchema);
 
   return (
@@ -76,17 +51,21 @@ export function ExerciseCreateDialog({
           // TODO handle submit
           onSubmit={(v, helpers) => {
             mutation.mutate(v, {
-              onSuccess: () =>
+              onSuccess: () => {
                 helpers.resetForm({
                   values: { name: "", unit: "weight_reps" },
-                }),
+                });
+                onOpenChange?.(false);
+              },
             });
           }}
         >
           {({ errors, handleSubmit, setFieldValue, values, isSubmitting }) => (
             <Form onSubmit={handleSubmit} className="grid gap-4">
               <div>
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name" className="mb-2 block">
+                  Name
+                </Label>
                 <Field
                   as={Input}
                   id="name"
@@ -101,7 +80,7 @@ export function ExerciseCreateDialog({
               </div>
 
               <div>
-                <Label>Unit</Label>
+                <Label className="mb-2 block">Unit</Label>
                 <Select
                   value={values.unit}
                   onValueChange={(v) => setFieldValue("unit", v)}

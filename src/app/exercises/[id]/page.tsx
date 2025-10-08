@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -13,6 +12,7 @@ import { LogsTable } from "@/components/LogsTable";
 
 import { Log, Metric, Unit } from "@/lib/types";
 import { best1RMOf, driveKpis, makeSeries } from "@/lib/training";
+import { useGetLogsByExercise } from "@/components/hooks/api/logs";
 
 export default function ExerciseDetailPage() {
   const params = useParams<{ id: string }>();
@@ -27,18 +27,12 @@ export default function ExerciseDetailPage() {
 
   const [metric, setMetric] = useState<Metric>("one_rm");
 
-  const { data: logs = [], isLoading } = useQuery<Log[]>({
-    queryKey: ["logsByExercise", id, start, end],
-    queryFn: async () => {
-      const res = await fetch(`/api/logs?start=${start}&end=${end}`);
-      if (!res.ok) {
-        throw new Error("Failed to load logs");
-      }
-      const all = (await res.json()) as Log[];
-      return all.filter((l) => l.exerciseId === id);
-    },
-    staleTime: 10_000,
+  const { data: rawLogs = [], isLoading } = useGetLogsByExercise(id, {
+    start,
+    end,
   });
+
+  const logs = (rawLogs as unknown as Log[]) ?? [];
 
   const derivedName = logs[0]?.exercise?.name ?? "Exercise";
   const unit: Unit = logs[0]?.exercise?.unit ?? "weight_reps";
@@ -74,7 +68,7 @@ export default function ExerciseDetailPage() {
               label="Best Est. 1RM"
               value={Math.round(best1RM).toLocaleString()}
               subtle={
-                latest && best1RMOf(latest) === best1RM
+                latest && best1RMOf(latest, unit) === best1RM
                   ? "PR in last session 🎉"
                   : undefined
               }

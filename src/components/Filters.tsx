@@ -27,7 +27,7 @@ export function Filters({
   return (
     <div className="grid md:grid-cols-12 gap-4 items-end">
       <div className="md:col-span-3">
-        <Label>Start</Label>
+        <Label className="mb-2 block">Start</Label>
         <Input
           type="date"
           value={start}
@@ -35,7 +35,7 @@ export function Filters({
         />
       </div>
       <div className="md:col-span-3">
-        <Label>End</Label>
+        <Label className="mb-2 block">End</Label>
         <Input
           type="date"
           value={end}
@@ -43,7 +43,7 @@ export function Filters({
         />
       </div>
       <div className="md:col-span-6">
-        <Label>Metric</Label>
+        <Label className="mb-2 block">Metric</Label>
         <Tabs value={metric} onValueChange={(v) => onChangeMetric(v as Metric)}>
           <TabsList className="w-full">
             <TabsTrigger value="one_rm" className="flex-1">

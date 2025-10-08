@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
       <div className="grid md:grid-cols-12 gap-4 items-end">
         <div className="md:col-span-3">
-          <Label>Start</Label>
+          <Label className="mb-2 block">Start</Label>
           <Input
             type="date"
             value={safeRange.start}
@@ -118,7 +118,7 @@ export default function DashboardPage() {
           />
         </div>
         <div className="md:col-span-3">
-          <Label>End</Label>
+          <Label className="mb-2 block">End</Label>
           <Input
             type="date"
             value={safeRange.end}
@@ -132,7 +132,7 @@ export default function DashboardPage() {
           />
         </div>
         <div className="md:col-span-3">
-          <Label>Exercise</Label>
+          <Label className="mb-2 block">Exercise</Label>
           <Select value={exerciseId} onValueChange={setExerciseId}>
             <SelectTrigger>
               <SelectValue placeholder="All Exercises" />
@@ -147,7 +147,7 @@ export default function DashboardPage() {
           </Select>
         </div>
         <div className="md:col-span-3">
-          <Label>Metric</Label>
+          <Label className="mb-2 block">Metric</Label>
           <Tabs
             value={state.metric}
             onValueChange={(v) =>

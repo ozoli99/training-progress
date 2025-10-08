@@ -3,6 +3,7 @@ import { exercises, sessionLogs } from "@/infrastructure/db/schema";
 import { sql } from "drizzle-orm";
 import InlineSparkline from "./InlineSparkline";
 import { SeriesPoint } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 // TODO: Fix the Log types
 type Log = {
@@ -25,7 +26,13 @@ function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-export default async function HeroLiveStats() {
+export default async function HeroLiveStats({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  compact?: boolean;
+}) {
   const [{ c: exCount }] = await db
     .select({ c: sql<number>`count(*)` })
     .from(exercises);
@@ -63,22 +70,20 @@ export default async function HeroLiveStats() {
   }
 
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-4">
-      <div className="text-sm text-muted-foreground">
-        <span>{exCount ?? 0} exercises</span>
-        <span className="mx-2">•</span>
-        <span>{logCount ?? 0} logs</span>
-      </div>
-
-      <span aria-hidden className="hidden sm:inline text-muted-foreground">
-        •
-      </span>
-
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-muted-foreground">
-          Last 30 days volume
-        </span>
+    <div className={cn(compact ? "" : "mt-5", className)}>
+      <div className="w-[200px] sm:w-[240px]">
         <InlineSparkline data={spark} />
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Last 30 days volume</span>
+          <span aria-hidden className="mx-1">
+            •
+          </span>
+          <span>{exCount ?? 0} exercises</span>
+          <span aria-hidden className="mx-1">
+            •
+          </span>
+          <span>{logCount ?? 0} logs</span>
+        </div>
       </div>
     </div>
   );

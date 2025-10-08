@@ -20,11 +20,11 @@ export function LogsTable({ logs, unit }: Props) {
         .map((l) => ({
           id: l.id,
           date: l.date,
-          vol: volumeOf(l),
-          best: best1RMOf(l),
+          vol: volumeOf(l, unit),
+          best: best1RMOf(l, unit),
           time: totalTimeOf(l),
         })),
-    [logs]
+    [logs, unit]
   );
 
   return (

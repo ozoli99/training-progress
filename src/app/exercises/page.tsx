@@ -93,14 +93,7 @@ export default function ExercisesPage() {
           ))}
         </div>
       )}
-      <ExerciseCreateDialog
-        open={open}
-        onOpenChange={(o) => setOpen(o)}
-        onCreated={() => {
-          toast.success("Exercise created");
-          refetch();
-        }}
-      />
+      <ExerciseCreateDialog open={open} onOpenChange={(o) => setOpen(o)} />
     </div>
   );
 }

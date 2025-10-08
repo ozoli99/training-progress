@@ -50,6 +50,25 @@ export const useGetLogs = (safeRange: RangeFilter) =>
     staleTime: 10_000,
   });
 
+export const useGetLogsByExercise = (
+  exerciseId: string | undefined,
+  safeRange: RangeFilter
+) =>
+  useQuery<GetLogsDTO[]>({
+    queryKey: [queryKey, "byExercise", exerciseId, safeRange],
+    enabled: Boolean(exerciseId),
+    queryFn: async () => {
+      const url = `/api/logs?start=${safeRange.start}&end=${safeRange.end}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch: ${res.status}`);
+      }
+      const data = (await res.json()) as GetLogsDTO[];
+      return data.filter((l) => l.exerciseId === exerciseId);
+    },
+    staleTime: 10_000,
+  });
+
 export const useCreateLog = () => {
   const queryClient = useQueryClient();
 

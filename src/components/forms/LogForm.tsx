@@ -117,15 +117,27 @@ export function LogForm() {
           const ex = getExercise(values.exerciseId);
           const unit = ex?.unit ?? "weight_reps";
 
-          const totalVolume = sum(
-            values.sets.map((s) => (s.reps && s.weight ? s.reps * s.weight : 0))
-          );
-          const best1RM = Math.max(
-            0,
-            ...values.sets.map((s) =>
-              estimate1RM(Number(s.reps), Number(s.weight))
-            )
-          );
+          const totalVolume =
+            unit === "weight_reps"
+              ? sum(
+                  values.sets.map((s) =>
+                    s.reps && s.weight ? s.reps * s.weight : 0
+                  )
+                )
+              : unit === "reps"
+                ? sum(values.sets.map((s) => (s.reps ? s.reps : 0)))
+                : 0;
+
+          const best1RM =
+            unit !== "weight_reps"
+              ? 0
+              : Math.max(
+                  0,
+                  ...values.sets.map((s) =>
+                    estimate1RM(Number(s.reps), Number(s.weight))
+                  )
+                );
+
           const totalSecs = sum(values.sets.map((s) => Number(s.timeSec ?? 0)));
 
           const saveDisabled =
@@ -139,7 +151,9 @@ export function LogForm() {
             <Form className="grid gap-6">
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="date">Date</Label>
+                  <Label htmlFor="date" className="mb-2 block">
+                    Date
+                  </Label>
                   <Input
                     id="date"
                     type="date"
@@ -154,7 +168,7 @@ export function LogForm() {
                   )}
                 </div>
                 <div>
-                  <Label>Exercise</Label>
+                  <Label className="mb-2 block">Exercise</Label>
                   <Select
                     value={values.exerciseId ?? ""}
                     name="exerciseId"
@@ -220,7 +234,9 @@ export function LogForm() {
               )}
 
               <div>
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes" className="mb-2 block">
+                  Notes
+                </Label>
                 <Field
                   as={Textarea}
                   id="notes"

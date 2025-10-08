@@ -1,4 +1,4 @@
-import { LogForm } from "@/ui/components/forms/LogForm";
+import { LogForm } from "@/components/forms/LogForm";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function LogPage() {
