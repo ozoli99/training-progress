@@ -1,99 +1,76 @@
+// app/exercises/page.tsx
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { ExerciseCreateDialog } from "@/components/ExerciseCreateDialog";
-import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Exercise, SortDir } from "@/lib/types";
-import { FiltersRow } from "@/components/FiltersRow";
-import { ExerciseCard } from "@/components/ExerciseCard";
-import { useGetExercises } from "@/components/hooks/api/exercises";
-import { sortByName } from "@/lib/sort";
+import * as React from "react";
+import { api } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+
+type Exercise = {
+  id: string;
+  orgId: string;
+  name: string;
+  category: string | null;
+  modality: string | null;
+};
 
 export default function ExercisesPage() {
-  const { data = [], isLoading, isError, refetch } = useGetExercises();
+  const [items, setItems] = React.useState<Exercise[]>([]);
+  const [q, setQ] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
 
-  const [q, setQ] = useState("");
-  const [unit, setUnit] = useState<Exercise["unit"] | "all">("all");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [open, setOpen] = useState(false);
-
-  const toggleSort = useCallback(
-    () => setSortDir((d) => (d === "asc" ? "desc" : "asc")),
-    []
-  );
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName?.match(/INPUT|TEXTAREA|SELECT/)) {
-        return;
-      }
-      if (e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        setOpen(true);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+  const load = React.useCallback(async () => {
+    try {
+      setError(null);
+      // Basic list — adapt to your actual endpoint if it uses search
+      const res = await api<Exercise[]>("/api/orgs/any/exercises"); // if you have a canonical list route use that
+      setItems(res);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load exercises");
+    }
   }, []);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return data
-      .filter((x) => (unit === "all" ? true : x.unit === unit))
-      .filter((x) => (!needle ? true : x.name.toLowerCase().includes(needle)))
-      .sort((a, b) => sortByName(a, b, sortDir));
-  }, [data, q, unit, sortDir]);
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  const filtered = q
+    ? items.filter((i) => i.name.toLowerCase().includes(q.toLowerCase().trim()))
+    : items;
 
   return (
-    <div className="grid gap-6">
-      <FiltersRow
-        q={q}
-        setQ={setQ}
-        unit={unit}
-        setUnit={setUnit}
-        sortDir={sortDir}
-        toggleSort={toggleSort}
-        onRefresh={refetch}
-        onNew={() => setOpen(true)}
-      />
-      {isLoading && (
-        <div className="grid gap-2">
-          <div className="h-16 rounded-xl bg-muted animate-pulse" />
-          <div className="h-16 rounded-xl bg-muted animate-pulse" />
-          <div className="h-16 rounded-xl bg-muted animate-pulse" />
-        </div>
-      )}
-      {isError && (
-        <div className="rounded-xl border p-4 text-sm">
-          Failed to load exercises.
-          <Button
-            size="sm"
-            variant="link"
-            onClick={() => refetch()}
-            className="ml-2 p-0 h-auto"
-          >
-            Try again
-          </Button>
-        </div>
-      )}
-      {!isLoading && !isError && filtered.length === 0 && (
-        <div className="rounded-xl border p-6 text-sm text-muted-foreground">
-          No exercises found. Adjust filters or{" "}
-          <button className="underline" onClick={() => setOpen(true)}>
-            create a new one
-          </button>
-          .
-        </div>
-      )}
-      {!isLoading && !isError && filtered.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Exercises</h1>
+        <Input
+          placeholder="Search exercises…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-sm"
+        />
+      </div>
+
+      {error ? (
+        <p className="text-sm text-red-600">{error}</p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((ex) => (
-            <ExerciseCard key={ex.id} exercise={ex} />
+            <Card key={ex.id} className="hover:bg-muted/40 transition">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{ex.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                {ex.category || "—"} · {ex.modality || "—"}
+              </CardContent>
+            </Card>
           ))}
+          {filtered.length === 0 && (
+            <p className="text-sm text-muted-foreground col-span-full">
+              No exercises found.
+            </p>
+          )}
         </div>
       )}
-      <ExerciseCreateDialog open={open} onOpenChange={(o) => setOpen(o)} />
     </div>
   );
 }

@@ -43,3 +43,5 @@ next-env.d.ts
 # database
 data.sqlite
 drizzle/*.sql
+# clerk configuration (can include secrets)
+/.clerk/

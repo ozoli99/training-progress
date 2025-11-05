@@ -46,8 +46,12 @@ export function computeDomain(values: number[]): [() => number, () => number] {
   return [() => Math.max(0, Math.floor(min - pad)), () => Math.ceil(max + pad)];
 }
 
-export function isActive(pathname: string, href: string) {
-  return pathname === href || (href !== "/" && pathname.startsWith(href));
+export function isActive(pathname: string, href: string): boolean {
+  const clean = (s: string) => s.replace(/\/+$/, "") || "/";
+  const p = clean(pathname);
+  const h = clean(href);
+  if (h === "/") return p === "/";
+  return p === h || p.startsWith(h + "/");
 }
 
 export function ymd(d: Date = new Date()) {

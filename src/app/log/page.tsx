@@ -1,23 +1,30 @@
-import { LogForm } from "@/components/forms/LogForm";
-import { Card, CardContent } from "@/components/ui/card";
+// app/log/page.tsx
+"use client";
+
+import * as React from "react";
+import NewMeasurementDialog from "@/components/athletes/NewMeasurementDialog";
+import MeasurementTable from "@/components/athletes/MeasurementTable";
 
 export default function LogPage() {
-  return (
-    <div className="grid gap-6">
-      <div>
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-          Add Training Log
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pick an exercise, add sets, and save. The form autosaves as you type.
-        </p>
-      </div>
+  const [athleteId, setAthleteId] = React.useState("");
 
-      <Card>
-        <CardContent className="p-0 md:p-6">
-          <LogForm />
-        </CardContent>
-      </Card>
+  React.useEffect(() => {
+    setAthleteId(localStorage.getItem("dev_athlete_id") || "");
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Measurements</h1>
+        <NewMeasurementDialog
+          athleteId={athleteId}
+          onCreated={() => {
+            // MeasurementTable reloads on key props changes; simplest is to bump a key
+            // but we'll keep it minimal here — a hard refresh also works in dev.
+          }}
+        />
+      </div>
+      <MeasurementTable athleteId={athleteId} limit={50} />
     </div>
   );
 }
