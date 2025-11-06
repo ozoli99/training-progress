@@ -1,186 +1,82 @@
-// features/auth/context.ts
-import { cookies as getCookies, headers as getHeaders } from "next/headers";
-import { AppError } from "@/shared/errors";
-import { db } from "@/infrastructure/db/client";
-import {
-  org,
-  orgMember,
-  userAccount as userTable,
-} from "@/infrastructure/db/schema";
-import { and, eq } from "drizzle-orm";
+import { auth } from "@clerk/nextjs/server";
+import { createClerkClient } from "@clerk/backend";
+import type { OrgRole } from "./utils";
+import { UnauthorizedError, ForbiddenError, roleGte } from "./utils";
 
-type Role = "owner" | "admin" | "coach" | "athlete";
-export type AuthCtx = {
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY!,
+});
+
+export type AuthContext = {
   userId: string;
-  orgId: string;
-  role: Role;
-  clerkUserId?: string;
+  sessionId: string | null;
+  orgId: string | null;
+  orgRole: OrgRole | null;
 };
 
-const ORG_HEADER = "x-org-id";
-const USER_HEADER = "x-user-id";
-const ORG_COOKIE = "active_org_id";
-const DEV_USER_COOKIE = "dev_user_id";
-const USE_CLERK = process.env.AUTH_WITH_CLERK === "true";
-
-async function getHeadersAndCookies() {
-  const h0 = getHeaders() as any;
-  const c0 = getCookies() as any;
-  const h = typeof h0?.then === "function" ? await h0 : h0;
-  const c = typeof c0?.then === "function" ? await c0 : c0;
-  return { h, c } as {
-    h: Headers;
-    c: ReadonlyMap<string, { value: string }> & {
-      get(name: string): { value: string } | undefined;
-    };
-  };
+function resolveOrgId({
+  paramsOrgId,
+  headerOrgId,
+  clerkOrgId,
+}: {
+  paramsOrgId?: string | null;
+  headerOrgId?: string | null;
+  clerkOrgId?: string | null;
+}): string | null {
+  if (paramsOrgId) return paramsOrgId;
+  if (headerOrgId) return headerOrgId;
+  return clerkOrgId ?? null;
 }
 
-async function readHints() {
-  const { h, c } = await getHeadersAndCookies();
-  const orgFromHdr = h.get(ORG_HEADER)?.trim() || null;
-  const userFromHdr = h.get(USER_HEADER)?.trim() || null;
-  const orgFromCookie = c.get(ORG_COOKIE)?.value?.trim() || null;
-  const userFromCookie = c.get(DEV_USER_COOKIE)?.value?.trim() || null;
+export async function getAuthContext(options?: {
+  params?: { orgId?: string };
+  headers?: Headers;
+}): Promise<AuthContext> {
+  const { userId, sessionId, orgId: clerkActiveOrgId, orgRole } = await auth();
+  if (!userId) throw new UnauthorizedError();
+
+  const headerOrgId =
+    options?.headers?.get("x-org-id") ??
+    options?.headers?.get("X-Org-Id") ??
+    null;
+
+  const orgId = resolveOrgId({
+    paramsOrgId: options?.params?.orgId ?? null,
+    headerOrgId,
+    clerkOrgId: clerkActiveOrgId ?? null,
+  });
+
   return {
-    hintedOrgId: orgFromHdr || orgFromCookie,
-    hintedUserId: userFromHdr || userFromCookie,
+    userId,
+    sessionId: sessionId ?? null,
+    orgId,
+    orgRole: (orgRole as OrgRole) ?? null,
   };
 }
 
-/* ----------------------------- DEV MODE ----------------------------- */
-
-async function ensureDevUser(hintedUserId: string | null) {
-  if (hintedUserId) {
-    const u = await db.query.userAccount.findFirst({
-      where: eq(userTable.id, hintedUserId),
-    });
-    if (u) return u.id;
-  }
-  const existing = await db.query.userAccount.findFirst({});
-  if (existing) return existing.id;
-
-  const inserted = await db
-    .insert(userTable)
-    .values({ email: "dev@example.com", fullName: "Dev User" })
-    .returning({ id: userTable.id });
-
-  const newId = inserted[0]?.id;
-  if (!newId) throw new Error("Failed to create dev user.");
-  return newId;
-}
-
-async function resolveActiveOrgId(localUserId: string, hint: string | null) {
-  // If a hint is present, ensure the user is a member of that org
-  if (hint) {
-    const m = await db.query.orgMember.findFirst({
-      where: and(eq(orgMember.orgId, hint), eq(orgMember.userId, localUserId)),
-    });
-    if (m) return hint;
+export async function assertOrgAccess(
+  context: AuthContext,
+  minRole?: OrgRole
+): Promise<AuthContext & { orgRole: OrgRole }> {
+  if (!context.orgId) {
+    throw new ForbiddenError("Organization not selected.");
   }
 
-  // Fallback: first org where the user is a member (use FK directly)
-  const m = await db.query.orgMember.findFirst({
-    where: eq(orgMember.userId, localUserId),
+  const memberships = await clerk.users.getOrganizationMembershipList({
+    userId: context.userId,
+    limit: 200,
   });
-  if (m?.orgId) return m.orgId;
 
-  // No membership yet: pick any existing org (select only id to avoid `never`)
-  const rows = await db.select({ id: org.id }).from(org).limit(1);
-  const anyOrgId = rows[0]?.id;
-  if (!anyOrgId) {
-    throw new AppError.Unauthorized(
-      "No organizations exist yet. Seed an org or create one first."
-    );
+  const me = memberships.data.find((m) => m.organization.id === context.orgId);
+  if (!me) throw new ForbiddenError("Not a member of this organization.");
+
+  const myRole = (me.role as OrgRole) ?? context.orgRole ?? null;
+  if (minRole) {
+    if (!myRole)
+      throw new ForbiddenError("Missing role for this organization.");
+    if (!roleGte(myRole, minRole))
+      throw new ForbiddenError("Insufficient role.");
   }
 
-  // Attach user as owner to that org
-  await db
-    .insert(orgMember)
-    .values({ orgId: anyOrgId, userId: localUserId, role: "owner" });
-
-  return anyOrgId;
-}
-
-async function resolveRole(localUserId: string, orgId: string): Promise<Role> {
-  const m = await db.query.orgMember.findFirst({
-    where: and(eq(orgMember.userId, localUserId), eq(orgMember.orgId, orgId)),
-  });
-  if (!m) throw new AppError.Forbidden("You are not a member of this org.");
-  const r = m.role as Role;
-  return (
-    ["owner", "admin", "coach", "athlete"].includes(r) ? r : "athlete"
-  ) as Role;
-}
-
-/* ----------------------------- CLERK MODE ----------------------------- */
-
-async function ensureLocalUserFromClerk(clerkUserId: string) {
-  const mod = await import("@clerk/nextjs/server").catch(() => null as any);
-  if (!mod?.clerkClient)
-    throw new Error("Clerk not available but AUTH_WITH_CLERK=true.");
-  const { clerkClient } = mod;
-
-  const existing = await db.query.userAccount.findFirst({
-    where: eq(userTable.clerkUserId, clerkUserId),
-  });
-  if (existing) return existing.id;
-
-  const cu = await clerkClient.users.getUser(clerkUserId);
-  const email =
-    cu.emailAddresses?.find((e: any) => e.id === cu.primaryEmailAddressId)
-      ?.emailAddress ??
-    cu.emailAddresses?.[0]?.emailAddress ??
-    "unknown";
-  const fullName =
-    [cu.firstName, cu.lastName].filter(Boolean).join(" ") || null;
-  const avatarUrl = cu.imageUrl || null;
-
-  const rows = await db
-    .insert(userTable)
-    .values({
-      clerkUserId,
-      email,
-      fullName: fullName ?? undefined,
-      avatarUrl: avatarUrl ?? undefined,
-    })
-    .returning({ id: userTable.id });
-
-  const createdId = rows[0]?.id;
-  if (!createdId) throw new Error("Failed to create local user for Clerk.");
-  return createdId;
-}
-
-/* ------------------------------- PUBLIC ------------------------------- */
-
-export async function getAuthCtx(): Promise<AuthCtx> {
-  const { hintedOrgId, hintedUserId } = await readHints();
-
-  if (!USE_CLERK) {
-    const localUserId = await ensureDevUser(hintedUserId);
-    const activeOrgId = await resolveActiveOrgId(localUserId, hintedOrgId);
-    const role = await resolveRole(localUserId, activeOrgId);
-    return { userId: localUserId, orgId: activeOrgId, role };
-  }
-
-  const mod = await import("@clerk/nextjs/server").catch(() => null as any);
-  if (!mod?.auth)
-    throw new Error("Clerk not available but AUTH_WITH_CLERK=true.");
-  const { userId: clerkUserId } = mod.auth();
-  if (!clerkUserId) throw new AppError.Unauthorized("Sign in required.");
-
-  const localUserId = await ensureLocalUserFromClerk(clerkUserId);
-  const activeOrgId = await resolveActiveOrgId(localUserId, hintedOrgId);
-  const role = await resolveRole(localUserId, activeOrgId);
-  return { userId: localUserId, orgId: activeOrgId, role, clerkUserId };
-}
-
-export function assertRole(ctx: AuthCtx, allowed: Role[]) {
-  if (!allowed.includes(ctx.role))
-    throw new AppError.Forbidden("You don't have permission for this action.");
-}
-
-export async function getOrgScopedAuth() {
-  const ctx = await getAuthCtx();
-  return { orgId: ctx.orgId, userId: ctx.userId, role: ctx.role };
+  return { ...context, orgRole: myRole as OrgRole };
 }

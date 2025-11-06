@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { withApiAuth } from "@/features/auth/guard";
+import type { OrgRole } from "@/features/auth/utils";
 import { analyticsService } from "@/features/analytics/service";
+import { parseDateRange } from "@/lib/api";
+
+const VIEWER: OrgRole = "org:viewer";
 
 function defaultRange() {
   const to = new Date();
@@ -9,35 +14,14 @@ function defaultRange() {
   return { from: fmt(from), to: fmt(to) };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { orgId: string } }
-) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const from = searchParams.get("from") ?? defaultRange().from;
-    const to = searchParams.get("to") ?? defaultRange().to;
-
+export const GET = withApiAuth(
+  async (req: NextRequest, { params }: { params: { orgId: string } }) => {
+    const range = { ...defaultRange(), ...parseDateRange(req.url) };
     const rows = await analyticsService.getWorkoutBreakdown({
       orgId: params.orgId,
-      range: { from, to },
+      range,
     });
-
-    return NextResponse.json({ rows }, { status: 200 });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
-
-export async function POST(
-  req: NextRequest,
-  _ctx: { params: { orgId: string } }
-) {
-  try {
-    const body = await req.json();
-    await analyticsService.recomputeForWorkoutLog(body);
-    return NextResponse.json({ ok: true }, { status: 202 });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
+    return NextResponse.json(rows);
+  },
+  { scope: "org", minRole: VIEWER }
+);

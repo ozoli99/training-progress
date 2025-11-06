@@ -1,42 +1,35 @@
-// lib/api.ts
-export type DevHeaders = {
-  orgId?: string | null;
-  userId?: string | null;
-};
+// src/lib/api.ts  (moved from apiAuth to a neutral place)
+import { z } from "zod";
 
-function getDevHeaders(): DevHeaders {
-  if (typeof window === "undefined") return {};
+const DateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
+
+export function defaultRange() {
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - 27);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+export function parseDateRange(url: string) {
+  const { searchParams } = new URL(url);
+  const from = searchParams.get("from") ?? defaultRange().from;
+  const to = searchParams.get("to") ?? defaultRange().to;
+  const parsed = z.object({ from: DateOnly, to: DateOnly }).parse({ from, to });
+  return parsed;
+}
+
+export function parsePagination(url: string) {
+  const { searchParams } = new URL(url);
+  const limit = Number(searchParams.get("limit") ?? 10);
+  const offset = Number(searchParams.get("offset") ?? 0);
   return {
-    orgId: localStorage.getItem("dev_org_id"),
-    userId: localStorage.getItem("dev_user_id"),
+    limit: Number.isFinite(limit) ? limit : 10,
+    offset: Number.isFinite(offset) ? offset : 0,
   };
 }
 
-export async function api<T>(
-  input: RequestInfo | URL,
-  init?: RequestInit & { json?: unknown }
-): Promise<T> {
-  const { orgId, userId } = getDevHeaders();
-  const headers = new Headers(init?.headers || {});
-  headers.set("content-type", "application/json");
-  if (orgId) headers.set("x-org-id", orgId);
-  if (userId) headers.set("x-user-id", userId); // your dev mode helper
-
-  const res = await fetch(input, {
-    ...init,
-    headers,
-    body: init?.json !== undefined ? JSON.stringify(init.json) : init?.body,
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try {
-      const data = await res.json();
-      msg = data?.error || msg;
-    } catch {}
-    throw new Error(msg);
-  }
-  // 204 No Content
-  if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
-}
+export const json = {
+  ok: (data: unknown, status = 200) => Response.json(data, { status }),
+  err: (error: string, status = 400) => Response.json({ error }, { status }),
+};

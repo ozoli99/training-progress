@@ -15,6 +15,7 @@ import type {
   TDateRangeInput,
   TKPIResponse,
   TLeaderboardResponse,
+  TSessionRow,
   TTrendSeriesResponse,
   TWorkoutBreakdownRow,
 } from "./dto";
@@ -42,6 +43,12 @@ export interface AnalyticsRepository {
     orgId: string,
     range: TDateRangeInput
   ): Promise<TWorkoutBreakdownRow[]>;
+  getSessionsByOrg(
+    orgId: string,
+    range: TDateRangeInput,
+    limit: number,
+    offset: number
+  ): Promise<{ total: number; items: TSessionRow[] }>;
   getSessionKeys(
     sessionId: string
   ): Promise<{ orgId: string; day: string; athleteId: string } | null>;
@@ -218,6 +225,58 @@ export function makeAnalyticsRepository(
         avgDurationS: r.avgDurationS,
         avgWorkDensity: r.avgWorkDensity,
       }));
+    },
+
+    async getSessionsByOrg(orgId, { from, to }, limit, offset) {
+      const [{ count }] = await database
+        .select({ count: sql<number>`count(*)` })
+        .from(analyticsSessionFact)
+        .where(
+          and(
+            eq(analyticsSessionFact.orgId, orgId),
+            gte(analyticsSessionFact.sessionDate, from),
+            lte(analyticsSessionFact.sessionDate, to)
+          )
+        );
+
+      const rows = await database
+        .select({
+          sessionId: analyticsSessionFact.sessionId,
+          athleteId: analyticsSessionFact.athleteId,
+          sessionDate: analyticsSessionFact.sessionDate,
+          trainingLocationId: analyticsSessionFact.trainingLocationId,
+          completionPct: analyticsSessionFact.completionPct,
+          totalSets: analyticsSessionFact.totalSets,
+          totalVolumeKg: analyticsSessionFact.totalVolumeKg,
+          totalDurationS: analyticsSessionFact.totalDurationS,
+          avgRpe: analyticsSessionFact.avgRpe,
+        })
+        .from(analyticsSessionFact)
+        .where(
+          and(
+            eq(analyticsSessionFact.orgId, orgId),
+            gte(analyticsSessionFact.sessionDate, from),
+            lte(analyticsSessionFact.sessionDate, to)
+          )
+        )
+        .orderBy(desc(analyticsSessionFact.sessionDate))
+        .limit(limit)
+        .offset(offset);
+
+      return {
+        total: Number(count ?? 0),
+        items: rows.map((r) => ({
+          sessionId: r.sessionId,
+          athleteId: r.athleteId,
+          sessionDate: r.sessionDate as unknown as string,
+          trainingLocationId: r.trainingLocationId ?? null,
+          completionPct: r.completionPct ?? null,
+          totalSets: r.totalSets ?? null,
+          totalVolumeKg: toNum(r.totalVolumeKg),
+          totalDurationS: toNum(r.totalDurationS),
+          avgRpe: toNum(r.avgRpe),
+        })),
+      };
     },
 
     async getSessionKeys(sessionId) {

@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { withApiAuth } from "@/features/auth/guard";
+import type { OrgRole } from "@/features/auth/utils";
 import { analyticsService } from "@/features/analytics/service";
+import { parseDateRange } from "@/lib/api";
+
+const VIEWER: OrgRole = "org:viewer";
 
 function defaultRange() {
   const to = new Date();
@@ -9,23 +14,18 @@ function defaultRange() {
   return { from: fmt(from), to: fmt(to) };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { orgId: string; athleteId: string } }
-) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const from = searchParams.get("from") ?? defaultRange().from;
-    const to = searchParams.get("to") ?? defaultRange().to;
-
-    const data = await analyticsService.getAthleteTrend({
+export const GET = withApiAuth(
+  async (
+    req: NextRequest,
+    { params }: { params: { orgId: string; athleteId: string } }
+  ) => {
+    const range = { ...defaultRange(), ...parseDateRange(req.url) };
+    const series = await analyticsService.getAthleteTrend({
       orgId: params.orgId,
       athleteId: params.athleteId,
-      range: { from, to },
+      range,
     });
-
-    return NextResponse.json(data, { status: 200 });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
+    return NextResponse.json(series);
+  },
+  { scope: "org", minRole: VIEWER }
+);

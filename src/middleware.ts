@@ -10,10 +10,17 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return;
 
-  const { userId, redirectToSignIn } = await auth();
-
+  const { userId, orgId, redirectToSignIn } = await auth();
   if (!userId) {
     return redirectToSignIn({ returnBackUrl: req.url });
+  }
+
+  const needsOrg = /^\/org\/.+/.test(new URL(req.url).pathname);
+  if (needsOrg && !orgId) {
+    return new Response(null, {
+      status: 307,
+      headers: { Location: "/(app)/org" },
+    });
   }
 });
 

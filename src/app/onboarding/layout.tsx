@@ -1,4 +1,4 @@
-export default function MarketingLayout({
+export default function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode;

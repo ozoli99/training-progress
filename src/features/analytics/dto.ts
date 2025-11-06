@@ -76,7 +76,31 @@ export const WorkoutBreakdownRow = z.object({
   avgWorkDensity: z.number().nullable(),
 });
 
-/* ----------------------------- TS type exports -------------------------- */
+// --- Sessions list (per-session rows from analyticsSessionFact) ---
+export const PaginationInput = z.object({
+  limit: z.number().int().min(1).max(200).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+
+export const SessionRow = z.object({
+  sessionId: z.string().uuid(),
+  athleteId: z.string().uuid(),
+  sessionDate: DateOnly,
+  trainingLocationId: z.string().uuid().nullable(),
+  completionPct: z.number().int().nullable(),
+  totalSets: z.number().int().nullable(),
+  totalVolumeKg: z.number().nullable(),
+  totalDurationS: z.number().nullable(),
+  avgRpe: z.number().nullable(),
+});
+
+export const SessionsResponse = z.object({
+  total: z.number().int(),
+  items: z.array(SessionRow),
+});
+
+export type TSessionsResponse = z.infer<typeof SessionsResponse>;
+export type TSessionRow = z.infer<typeof SessionRow>;
 export type TDateRangeInput = z.infer<typeof DateRangeInput>;
 export type TKPIResponse = z.infer<typeof KPIResponse>;
 export type TTrendSeriesResponse = z.infer<typeof TrendSeriesResponse>;

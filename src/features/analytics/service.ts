@@ -8,6 +8,8 @@ import {
   RecomputeForWorkoutLogInput,
   RecomputeDailyInput,
   type TWorkoutBreakdownRow,
+  SessionsResponse,
+  PaginationInput,
 } from "./dto";
 import { analyticsRepository, type AnalyticsRepository } from "./repository";
 
@@ -59,8 +61,28 @@ export function makeAnalyticsService(repository: AnalyticsRepository) {
     }): Promise<TWorkoutBreakdownRow[]> {
       const range = DateRangeInput.parse(input.range);
       const rows = await repository.getWorkoutBreakdown(input.orgId, range);
-      // Validate each row so UI can trust the shape:
       return rows.map((r) => WorkoutBreakdownRow.parse(r));
+    },
+
+    async getSessions(input: {
+      orgId: string;
+      range: unknown;
+      limit?: number;
+      offset?: number;
+    }) {
+      const range = DateRangeInput.parse(input.range);
+      const { limit, offset } = PaginationInput.parse({
+        limit: input.limit ?? 50,
+        offset: input.offset ?? 0,
+      });
+
+      const data = await repository.getSessionsByOrg(
+        input.orgId,
+        range,
+        limit,
+        offset
+      );
+      return SessionsResponse.parse(data);
     },
 
     /* ----------------------------- Writers/ETL --------------------------- */

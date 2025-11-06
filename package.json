@@ -13,6 +13,7 @@
     "db:migrate": "tsx scripts/drizzle-env.ts && drizzle-kit migrate"
   },
   "dependencies": {
+    "@clerk/backend": "^2.19.3",
     "@clerk/nextjs": "^6.34.1",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -39,6 +40,8 @@
     "react-toggle": "link:@radix/ui/react-toggle",
     "recharts": "^3.2.1",
     "sonner": "^2.0.7",
+    "svix": "^1.81.0",
+    "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.1.11"
   },
