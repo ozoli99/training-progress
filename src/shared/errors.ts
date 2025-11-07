@@ -7,6 +7,12 @@ export namespace AppError {
   export class Forbidden extends Error {}
   export class Validation extends Error {}
   export class Unauthorized extends Error {}
+  export class BadRequest extends Error {}
+
+  export function fromUnknown(err: unknown, fallback = "Unknown error") {
+    if (err instanceof Error) return err;
+    return new Error(fallback);
+  }
 
   export function toHttp(err: unknown): { status: number; body: any } {
     if (err instanceof Validation)
@@ -19,6 +25,8 @@ export namespace AppError {
       return { status: 404, body: { error: err.message } };
     if (err instanceof Unauthorized)
       return { status: 401, body: { error: err.message } };
+    if (err instanceof BadRequest)
+      return { status: 400, body: { error: err.message } };
     if (err instanceof Error)
       return { status: 400, body: { error: err.message } };
     return { status: 500, body: { error: "Unknown Error" } };

@@ -1,115 +1,182 @@
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
-import { db } from "@/infrastructure/db/client";
-import { session } from "@/infrastructure/db/schema";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
+import {
+  session as SessionTbl,
+  type session as SessionTblType,
+} from "@/infrastructure/db/schema";
+import type {
+  TSessionRow,
+  TListSessionsInput,
+  TGetSessionInput,
+  TCreateSessionInput,
+  TUpdateSessionInput,
+  TDeleteSessionInput,
+} from "./dto";
 
-type ListArgs = {
-  orgId: string;
-  athleteId: string;
-  limit: number;
-  offset: number;
-  from?: string;
-  to?: string;
-  order: "asc" | "desc";
-  status?: string;
-  trainingLocationId?: string;
-};
-
-export async function repoListSessions(args: ListArgs) {
-  const filters = [
-    eq(session.orgId, args.orgId),
-    eq(session.athleteId, args.athleteId),
-    args.from ? gte(session.sessionDate, args.from) : undefined,
-    args.to ? lte(session.sessionDate, args.to) : undefined,
-    args.status ? eq(session.status, args.status) : undefined,
-    args.trainingLocationId
-      ? eq(session.trainingLocationId, args.trainingLocationId)
-      : undefined,
-  ].filter(Boolean) as any[];
-
-  const rows = await db
-    .select()
-    .from(session)
-    .where(and(...filters))
-    .orderBy(
-      args.order === "asc"
-        ? asc(session.sessionDate)
-        : desc(session.sessionDate)
-    )
-    .limit(args.limit)
-    .offset(args.offset);
-
-  return rows;
+function mapSessionRow(r: typeof SessionTblType.$inferSelect): TSessionRow {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    athleteId: r.athleteId,
+    plannedSessionId: r.plannedSessionId ?? null,
+    trainingLocationId: r.trainingLocationId ?? null,
+    sessionDate: r.sessionDate as unknown as string,
+    status: r.status ?? null,
+    completionPct: r.completionPct ?? 0,
+    loadSource: r.loadSource ?? null,
+    createdAt: (r.createdAt as unknown as Date).toISOString(),
+    updatedAt: (r.updatedAt as unknown as Date).toISOString(),
+  };
 }
 
-export async function repoGetSessionById(id: string) {
-  const [row] = await db
-    .select()
-    .from(session)
-    .where(eq(session.id, id))
-    .limit(1);
-  return row ?? null;
+export interface SessionsRepository {
+  list(input: TListSessionsInput): Promise<TSessionRow[]>;
+  get(input: TGetSessionInput): Promise<TSessionRow | null>;
+  create(input: TCreateSessionInput): Promise<TSessionRow>;
+  update(input: TUpdateSessionInput): Promise<TSessionRow>;
+  delete(input: TDeleteSessionInput): Promise<void>;
 }
 
-export async function repoInsertSession(input: {
-  orgId: string;
-  athleteId: string;
-  sessionDate: string;
-  status?: string | null;
-  completionPct?: number | null;
-  loadSource?: string | null;
-  trainingLocationId?: string | null;
-  plannedSessionId?: string | null;
-}) {
-  const [row] = await db
-    .insert(session)
-    .values({
-      orgId: input.orgId,
-      athleteId: input.athleteId,
-      sessionDate: input.sessionDate,
-      status: input.status ?? null,
-      completionPct: input.completionPct ?? 0,
-      loadSource: input.loadSource ?? null,
-      trainingLocationId: input.trainingLocationId ?? null,
-      plannedSessionId: input.plannedSessionId ?? null,
-    })
-    .returning();
-  return row!;
+export function makeSessionsRepository(
+  database = defaultDatabase
+): SessionsRepository {
+  return {
+    async list({
+      orgId,
+      athleteId,
+      dateFrom,
+      dateTo,
+      status,
+      plannedSessionId,
+      trainingLocationId,
+      limit = 100,
+      offset = 0,
+    }) {
+      const base = and(
+        eq(SessionTbl.orgId, orgId),
+        eq(SessionTbl.athleteId, athleteId),
+        dateFrom ? gte(SessionTbl.sessionDate, dateFrom) : sql`true`,
+        dateTo ? lte(SessionTbl.sessionDate, dateTo) : sql`true`,
+        status ? eq(SessionTbl.status, status) : sql`true`,
+        plannedSessionId
+          ? eq(SessionTbl.plannedSessionId, plannedSessionId)
+          : sql`true`,
+        trainingLocationId
+          ? eq(SessionTbl.trainingLocationId, trainingLocationId)
+          : sql`true`
+      );
+
+      const rows = await database
+        .select()
+        .from(SessionTbl)
+        .where(base)
+        .orderBy(sql`${SessionTbl.sessionDate} desc`)
+        .limit(limit)
+        .offset(offset);
+
+      return rows.map(mapSessionRow);
+    },
+
+    async get({ orgId, athleteId, sessionId }) {
+      const rows = await database
+        .select()
+        .from(SessionTbl)
+        .where(
+          and(
+            eq(SessionTbl.id, sessionId),
+            eq(SessionTbl.orgId, orgId),
+            eq(SessionTbl.athleteId, athleteId)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0];
+      return row ? mapSessionRow(row) : null;
+    },
+
+    async create({
+      orgId,
+      athleteId,
+      sessionDate,
+      status,
+      plannedSessionId,
+      trainingLocationId,
+      completionPct,
+      loadSource,
+    }) {
+      const [created] = await database
+        .insert(SessionTbl)
+        .values({
+          orgId,
+          athleteId,
+          sessionDate: sessionDate as any,
+          status: status ?? null,
+          plannedSessionId: plannedSessionId ?? null,
+          trainingLocationId: trainingLocationId ?? null,
+          completionPct: completionPct ?? 0,
+          loadSource: loadSource ?? null,
+        })
+        .returning();
+
+      return mapSessionRow(created);
+    },
+
+    async update({
+      orgId,
+      athleteId,
+      sessionId,
+      sessionDate,
+      status,
+      plannedSessionId,
+      trainingLocationId,
+      completionPct,
+      loadSource,
+    }) {
+      const existing = await this.get({ orgId, athleteId, sessionId });
+      if (!existing) {
+        throw new Error("Session not found or access denied.");
+      }
+
+      const [updated] = await database
+        .update(SessionTbl)
+        .set({
+          sessionDate:
+            sessionDate === undefined
+              ? sql`${SessionTbl.sessionDate}`
+              : (sessionDate as any),
+          status:
+            status === undefined ? sql`${SessionTbl.status}` : (status as any),
+          plannedSessionId:
+            plannedSessionId === undefined
+              ? sql`${SessionTbl.plannedSessionId}`
+              : (plannedSessionId as any),
+          trainingLocationId:
+            trainingLocationId === undefined
+              ? sql`${SessionTbl.trainingLocationId}`
+              : (trainingLocationId as any),
+          completionPct:
+            completionPct === undefined
+              ? sql`${SessionTbl.completionPct}`
+              : completionPct,
+          loadSource:
+            loadSource === undefined
+              ? sql`${SessionTbl.loadSource}`
+              : (loadSource as any),
+          updatedAt: sql`now()`,
+        })
+        .where(eq(SessionTbl.id, sessionId))
+        .returning();
+
+      return mapSessionRow(updated!);
+    },
+
+    async delete({ orgId, athleteId, sessionId }) {
+      const existing = await this.get({ orgId, athleteId, sessionId });
+      if (!existing) return;
+
+      await database.delete(SessionTbl).where(eq(SessionTbl.id, sessionId));
+    },
+  };
 }
 
-export async function repoUpdateSessionById(
-  id: string,
-  patch: {
-    sessionDate?: string;
-    status?: string | null;
-    completionPct?: number | null;
-    loadSource?: string | null;
-    trainingLocationId?: string | null;
-  }
-) {
-  const [row] = await db
-    .update(session)
-    .set({
-      sessionDate: patch.sessionDate,
-      status: patch.status,
-      completionPct: patch.completionPct ?? undefined,
-      loadSource: patch.loadSource,
-      trainingLocationId: patch.trainingLocationId ?? undefined,
-      updatedAt: new Date(),
-    })
-    .where(eq(session.id, id))
-    .returning();
-  return row ?? null;
-}
-
-export async function repoDeleteSessionById(id: string) {
-  await db.delete(session).where(eq(session.id, id));
-}
-
-export async function repoFindByPlannedId(plannedSessionId: string) {
-  const [row] = await db
-    .select()
-    .from(session)
-    .where(eq(session.plannedSessionId, plannedSessionId))
-    .limit(1);
-  return row ?? null;
-}
+export const sessionsRepository = makeSessionsRepository();

@@ -1,250 +1,442 @@
-import { and, asc, eq, max } from "drizzle-orm";
-import { db } from "@/infrastructure/db/client";
-import {
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import * as schema from "@/infrastructure/db/schema";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
+import type {
+  TWorkoutLogRow,
+  TWorkoutLogEntryRow,
+  TWorkoutRoundRow,
+} from "./dto";
+
+const {
+  session,
   workoutLog,
   workoutLogEntry,
   workoutRoundLog,
-} from "@/infrastructure/db/schema";
+  workoutRoundEntryLog,
+} = schema;
 
-// ---- WorkoutLog
-export async function repoListWorkoutLogsBySession(sessionId: string) {
-  return db
-    .select()
-    .from(workoutLog)
-    .where(eq(workoutLog.sessionId, sessionId));
-}
+export interface WorkoutLogsRepository {
+  ensureSessionInOrg(orgId: string, sessionId: string): Promise<boolean>;
+  ensureLogInOrg(orgId: string, workoutLogId: string): Promise<boolean>;
 
-export async function repoGetWorkoutLog(id: string) {
-  const [row] = await db
-    .select()
-    .from(workoutLog)
-    .where(eq(workoutLog.id, id))
-    .limit(1);
-  return row ?? null;
-}
+  listLogs(input: {
+    orgId: string;
+    sessionId: string;
+    limit?: number;
+    offset?: number;
+    order?: "asc" | "desc";
+  }): Promise<TWorkoutLogRow[]>;
 
-export async function repoInsertWorkoutLog(input: {
-  sessionId: string;
-  sessionBlockId?: string | null;
-  workoutId: string;
-  plannedWorkoutId?: string | null;
-  workoutVersionId?: string | null;
-  resultRaw?: string | null;
-  resultPrimary?: string | null;
-  asRx?: boolean;
-  isDraft?: boolean;
-}) {
-  const [row] = await db
-    .insert(workoutLog)
-    .values({
-      sessionId: input.sessionId,
-      sessionBlockId: input.sessionBlockId ?? null,
-      workoutId: input.workoutId,
-      plannedWorkoutId: input.plannedWorkoutId ?? null,
-      workoutVersionId: input.workoutVersionId ?? null,
-      resultRaw: input.resultRaw ?? null,
-      resultPrimary: input.resultPrimary ?? null,
-      asRx: input.asRx ?? false,
-      isDraft: input.isDraft ?? false,
-    })
-    .returning();
-  return row!;
-}
+  getLog(input: {
+    orgId: string;
+    sessionId: string;
+    workoutLogId: string;
+  }): Promise<TWorkoutLogRow | null>;
 
-export async function repoUpdateWorkoutLog(
-  id: string,
-  patch: {
-    sessionBlockId?: string | null;
-    workoutId?: string;
-    plannedWorkoutId?: string | null;
-    workoutVersionId?: string | null;
-    resultRaw?: string | null;
-    resultPrimary?: string | null;
+  createLog(input: {
+    orgId: string;
+    sessionId: string;
+    sessionBlockId?: string;
+    workoutId: string;
+    plannedWorkoutId?: string;
+    workoutVersionId?: string;
+    resultRaw?: string;
+    resultPrimary?: number;
     asRx?: boolean;
     isDraft?: boolean;
-  }
-) {
-  const [row] = await db
-    .update(workoutLog)
-    .set({
-      sessionBlockId: patch.sessionBlockId ?? undefined,
-      workoutId: patch.workoutId ?? undefined,
-      plannedWorkoutId: patch.plannedWorkoutId ?? undefined,
-      workoutVersionId: patch.workoutVersionId ?? undefined,
-      resultRaw: patch.resultRaw ?? undefined,
-      resultPrimary: patch.resultPrimary ?? undefined,
-      asRx: patch.asRx ?? undefined,
-      isDraft: patch.isDraft ?? undefined,
-    })
-    .where(eq(workoutLog.id, id))
-    .returning();
-  return row ?? null;
+  }): Promise<TWorkoutLogRow>;
+
+  updateLog(input: {
+    orgId: string;
+    sessionId: string;
+    workoutLogId: string;
+    patch: Partial<typeof workoutLog.$inferInsert>;
+  }): Promise<TWorkoutLogRow | null>;
+
+  deleteLog(input: {
+    orgId: string;
+    sessionId: string;
+    workoutLogId: string;
+  }): Promise<number>;
+
+  listEntries(input: {
+    orgId: string;
+    workoutLogId: string;
+    order?: "asc" | "desc";
+  }): Promise<TWorkoutLogEntryRow[]>;
+
+  replaceEntries(input: {
+    orgId: string;
+    workoutLogId: string;
+    items: Array<{
+      exerciseId: string;
+      sequenceIndex: number;
+      reps?: number | null;
+      loadKg?: number | null;
+      scaled?: boolean;
+      scaledToExerciseId?: string | null;
+      actualPrescription?: unknown;
+      equipmentExtra?: unknown;
+    }>;
+  }): Promise<TWorkoutLogEntryRow[]>;
+
+  listRounds(input: {
+    orgId: string;
+    workoutLogId: string;
+    order?: "asc" | "desc";
+  }): Promise<TWorkoutRoundRow[]>;
+
+  replaceRounds(input: {
+    orgId: string;
+    workoutLogId: string;
+    items: Array<{
+      roundIndex: number;
+      durationS?: number | null;
+      repsTotal?: number | null;
+      notes?: string | null;
+      entries?: Array<{
+        exerciseId: string;
+        reps?: number | null;
+        loadKg?: number | null;
+        extra?: unknown;
+      }>;
+    }>;
+  }): Promise<{
+    rounds: TWorkoutRoundRow[];
+  }>;
 }
 
-export async function repoDeleteWorkoutLog(id: string) {
-  await db.delete(workoutLog).where(eq(workoutLog.id, id));
+export function makeWorkoutLogsRepository(
+  database = defaultDatabase
+): WorkoutLogsRepository {
+  return {
+    async ensureSessionInOrg(orgId, sessionId) {
+      const [s] = await database
+        .select({ id: session.id })
+        .from(session)
+        .where(and(eq(session.id, sessionId), eq(session.orgId, orgId)))
+        .limit(1);
+      return !!s;
+    },
+
+    async ensureLogInOrg(orgId, workoutLogId) {
+      const [row] = await database
+        .select({ id: workoutLog.id })
+        .from(workoutLog)
+        .innerJoin(session, eq(workoutLog.sessionId, session.id))
+        .where(and(eq(workoutLog.id, workoutLogId), eq(session.orgId, orgId)))
+        .limit(1);
+      return !!row;
+    },
+
+    async listLogs({
+      orgId,
+      sessionId,
+      limit = 50,
+      offset = 0,
+      order = "asc",
+    }) {
+      const ok = await this.ensureSessionInOrg(orgId, sessionId);
+      if (!ok) return [];
+
+      const orderBy =
+        order === "asc" ? asc(workoutLog.id) : desc(workoutLog.id);
+
+      const rows = await database
+        .select()
+        .from(workoutLog)
+        .where(eq(workoutLog.sessionId, sessionId))
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset);
+
+      return rows.map(mapWorkoutLogRow);
+    },
+
+    async getLog({ orgId, sessionId, workoutLogId }) {
+      const ok = await this.ensureSessionInOrg(orgId, sessionId);
+      if (!ok) return null;
+
+      const [row] = await database
+        .select()
+        .from(workoutLog)
+        .where(
+          and(
+            eq(workoutLog.id, workoutLogId),
+            eq(workoutLog.sessionId, sessionId)
+          )
+        )
+        .limit(1);
+
+      return row ? mapWorkoutLogRow(row) : null;
+    },
+
+    async createLog({
+      orgId,
+      sessionId,
+      sessionBlockId,
+      workoutId,
+      plannedWorkoutId,
+      workoutVersionId,
+      resultRaw,
+      resultPrimary,
+      asRx,
+      isDraft,
+    }) {
+      const ok = await this.ensureSessionInOrg(orgId, sessionId);
+      if (!ok) return Promise.reject(new Error("Session not in org."));
+
+      const [row] = await database
+        .insert(workoutLog)
+        .values({
+          sessionId,
+          sessionBlockId: sessionBlockId ?? null,
+          workoutId,
+          plannedWorkoutId: plannedWorkoutId ?? null,
+          workoutVersionId: workoutVersionId ?? null,
+          resultRaw: resultRaw ?? null,
+          resultPrimary: resultPrimary != null ? String(resultPrimary) : null,
+          asRx: asRx ?? false,
+          isDraft: isDraft ?? false,
+        })
+        .returning();
+
+      return mapWorkoutLogRow(row);
+    },
+
+    async updateLog({ orgId, sessionId, workoutLogId, patch }) {
+      const ok = await this.ensureSessionInOrg(orgId, sessionId);
+      if (!ok) return null;
+
+      const [row] = await database
+        .update(workoutLog)
+        .set(patch)
+        .where(
+          and(
+            eq(workoutLog.id, workoutLogId),
+            eq(workoutLog.sessionId, sessionId)
+          )
+        )
+        .returning();
+
+      return row ? mapWorkoutLogRow(row) : null;
+    },
+
+    async deleteLog({ orgId, sessionId, workoutLogId }) {
+      const ok = await this.ensureSessionInOrg(orgId, sessionId);
+      if (!ok) return 0;
+
+      const roundIds = await database
+        .select({ id: workoutRoundLog.id })
+        .from(workoutRoundLog)
+        .where(eq(workoutRoundLog.workoutLogId, workoutLogId));
+
+      if (roundIds.length) {
+        await database
+          .delete(workoutRoundEntryLog)
+          .where(
+            eq(
+              workoutRoundEntryLog.workoutRoundLogId,
+              sql`${workoutRoundLog.id}`
+            )
+          );
+      }
+      await database.execute(sql`
+        delete from ${workoutRoundEntryLog}
+        where ${workoutRoundEntryLog.workoutRoundLogId} in (
+          select ${workoutRoundLog.id}
+          from ${workoutRoundLog}
+          where ${workoutRoundLog.workoutLogId} = ${workoutLogId}
+        )
+      `);
+
+      await database
+        .delete(workoutRoundLog)
+        .where(eq(workoutRoundLog.workoutLogId, workoutLogId));
+
+      await database
+        .delete(workoutLogEntry)
+        .where(eq(workoutLogEntry.workoutLogId, workoutLogId));
+
+      const res = await database
+        .delete(workoutLog)
+        .where(
+          and(
+            eq(workoutLog.id, workoutLogId),
+            eq(workoutLog.sessionId, sessionId)
+          )
+        );
+
+      return res.rowCount ?? 0;
+    },
+
+    async listEntries({ orgId, workoutLogId, order = "asc" }) {
+      const ok = await this.ensureLogInOrg(orgId, workoutLogId);
+      if (!ok) return [];
+
+      const orderBy =
+        order === "asc"
+          ? asc(workoutLogEntry.sequenceIndex)
+          : desc(workoutLogEntry.sequenceIndex);
+
+      const rows = await database
+        .select()
+        .from(workoutLogEntry)
+        .where(eq(workoutLogEntry.workoutLogId, workoutLogId))
+        .orderBy(orderBy);
+
+      return rows.map(mapWorkoutLogEntryRow);
+    },
+
+    async replaceEntries({ orgId, workoutLogId, items }) {
+      const ok = await this.ensureLogInOrg(orgId, workoutLogId);
+      if (!ok) return Promise.reject(new Error("WorkoutLog not in org."));
+
+      await database
+        .delete(workoutLogEntry)
+        .where(eq(workoutLogEntry.workoutLogId, workoutLogId));
+
+      if (items.length === 0) return [];
+
+      const payload: (typeof workoutLogEntry.$inferInsert)[] = items.map(
+        (it) => ({
+          workoutLogId,
+          exerciseId: it.exerciseId,
+          sequenceIndex: it.sequenceIndex ?? 0,
+          reps: it.reps ?? null,
+          loadKg: it.loadKg != null ? String(it.loadKg) : null,
+          scaled: it.scaled ?? false,
+          scaledToExerciseId: it.scaledToExerciseId ?? null,
+          actualPrescription: it.actualPrescription ?? null,
+          equipmentExtra: it.equipmentExtra ?? null,
+        })
+      );
+
+      const rows = await database
+        .insert(workoutLogEntry)
+        .values(payload)
+        .returning();
+
+      return rows.map(mapWorkoutLogEntryRow);
+    },
+
+    async listRounds({ orgId, workoutLogId, order = "asc" }) {
+      const ok = await this.ensureLogInOrg(orgId, workoutLogId);
+      if (!ok) return [];
+
+      const orderBy =
+        order === "asc"
+          ? asc(workoutRoundLog.roundIndex)
+          : desc(workoutRoundLog.roundIndex);
+
+      const rows = await database
+        .select()
+        .from(workoutRoundLog)
+        .where(eq(workoutRoundLog.workoutLogId, workoutLogId))
+        .orderBy(orderBy);
+
+      return rows.map(mapWorkoutRoundRow);
+    },
+
+    async replaceRounds({ orgId, workoutLogId, items }) {
+      const ok = await this.ensureLogInOrg(orgId, workoutLogId);
+      if (!ok) return Promise.reject(new Error("WorkoutLog not in org."));
+
+      await database.execute(sql`
+        delete from ${workoutRoundEntryLog}
+        where ${workoutRoundEntryLog.workoutRoundLogId} in (
+          select ${workoutRoundLog.id}
+          from ${workoutRoundLog}
+          where ${workoutRoundLog.workoutLogId} = ${workoutLogId}
+        )
+      `);
+      await database
+        .delete(workoutRoundLog)
+        .where(eq(workoutRoundLog.workoutLogId, workoutLogId));
+
+      if (items.length === 0) return { rounds: [] };
+
+      const roundPayload: (typeof workoutRoundLog.$inferInsert)[] = items.map(
+        (it) => ({
+          workoutLogId,
+          roundIndex: it.roundIndex ?? 0,
+          durationS: it.durationS != null ? String(it.durationS) : null,
+          repsTotal: it.repsTotal ?? null,
+          notes: it.notes ?? null,
+        })
+      );
+
+      const insertedRounds = await database
+        .insert(workoutRoundLog)
+        .values(roundPayload)
+        .returning();
+
+      const entryPayload: (typeof workoutRoundEntryLog.$inferInsert)[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const src = items[i];
+        const roundRow = insertedRounds[i];
+        if (!src.entries?.length) continue;
+
+        for (const e of src.entries) {
+          entryPayload.push({
+            workoutRoundLogId: roundRow.id,
+            exerciseId: e.exerciseId,
+            reps: e.reps ?? null,
+            loadKg: e.loadKg != null ? String(e.loadKg) : null,
+            extra: e.extra ?? null,
+          });
+        }
+      }
+      if (entryPayload.length) {
+        await database.insert(workoutRoundEntryLog).values(entryPayload);
+      }
+
+      return { rounds: insertedRounds.map(mapWorkoutRoundRow) };
+    },
+  };
 }
 
-// ---- Entries
-export async function repoNextEntrySeq(workoutLogId: string) {
-  const [agg] = await db
-    .select({ mx: max(workoutLogEntry.sequenceIndex).as("mx") })
-    .from(workoutLogEntry)
-    .where(eq(workoutLogEntry.workoutLogId, workoutLogId));
-  return (agg?.mx ?? 0) + 1;
+function mapWorkoutLogRow(r: typeof workoutLog.$inferSelect): TWorkoutLogRow {
+  return {
+    id: r.id,
+    sessionId: r.sessionId,
+    sessionBlockId: r.sessionBlockId ?? null,
+    workoutId: r.workoutId,
+    plannedWorkoutId: r.plannedWorkoutId ?? null,
+    workoutVersionId: r.workoutVersionId ?? null,
+    resultRaw: r.resultRaw ?? null,
+    resultPrimary: r.resultPrimary != null ? Number(r.resultPrimary) : null,
+    asRx: !!r.asRx,
+    isDraft: !!r.isDraft,
+  };
 }
 
-export async function repoInsertEntry(input: {
-  workoutLogId: string;
-  exerciseId: string;
-  sequenceIndex?: number | null;
-  reps?: number | null;
-  loadKg?: string | null;
-  scaled?: boolean | null;
-  scaledToExerciseId?: string | null;
-  actualPrescription?: any;
-  equipmentExtra?: any;
-}) {
-  const finalSeq =
-    input.sequenceIndex ?? (await repoNextEntrySeq(input.workoutLogId));
-  const [row] = await db
-    .insert(workoutLogEntry)
-    .values({
-      workoutLogId: input.workoutLogId,
-      exerciseId: input.exerciseId,
-      sequenceIndex: finalSeq,
-      reps: input.reps ?? null,
-      loadKg: input.loadKg ?? null,
-      scaled: input.scaled ?? false,
-      scaledToExerciseId: input.scaledToExerciseId ?? null,
-      actualPrescription: input.actualPrescription ?? null,
-      equipmentExtra: input.equipmentExtra ?? null,
-    })
-    .returning();
-  return row!;
+function mapWorkoutLogEntryRow(
+  r: typeof workoutLogEntry.$inferSelect
+): TWorkoutLogEntryRow {
+  return {
+    id: r.id,
+    workoutLogId: r.workoutLogId,
+    exerciseId: r.exerciseId,
+    sequenceIndex: r.sequenceIndex,
+    reps: r.reps ?? null,
+    loadKg: r.loadKg != null ? Number(r.loadKg) : null,
+    scaled: !!r.scaled,
+    scaledToExerciseId: r.scaledToExerciseId ?? null,
+    actualPrescription: r.actualPrescription ?? null,
+    equipmentExtra: r.equipmentExtra ?? null,
+  };
 }
 
-export async function repoUpdateEntry(
-  id: string,
-  patch: {
-    exerciseId?: string;
-    sequenceIndex?: number | null;
-    reps?: number | null;
-    loadKg?: string | null;
-    scaled?: boolean | null;
-    scaledToExerciseId?: string | null;
-    actualPrescription?: any;
-    equipmentExtra?: any;
-  }
-) {
-  const [row] = await db
-    .update(workoutLogEntry)
-    .set({
-      exerciseId: patch.exerciseId ?? undefined,
-      sequenceIndex: patch.sequenceIndex ?? undefined,
-      reps: patch.reps ?? undefined,
-      loadKg: patch.loadKg ?? undefined,
-      scaled: patch.scaled ?? undefined,
-      scaledToExerciseId: patch.scaledToExerciseId ?? undefined,
-      actualPrescription: patch.actualPrescription ?? undefined,
-      equipmentExtra: patch.equipmentExtra ?? undefined,
-    })
-    .where(eq(workoutLogEntry.id, id))
-    .returning();
-  return row ?? null;
-}
-
-export async function repoDeleteEntry(id: string) {
-  await db.delete(workoutLogEntry).where(eq(workoutLogEntry.id, id));
-}
-
-export async function repoListEntries(workoutLogId: string) {
-  return db
-    .select()
-    .from(workoutLogEntry)
-    .where(eq(workoutLogEntry.workoutLogId, workoutLogId))
-    .orderBy(asc(workoutLogEntry.sequenceIndex));
-}
-
-// ---- Rounds
-export async function repoNextRoundIndex(workoutLogId: string) {
-  const [agg] = await db
-    .select({ mx: max(workoutRoundLog.roundIndex).as("mx") })
-    .from(workoutRoundLog)
-    .where(eq(workoutRoundLog.workoutLogId, workoutLogId));
-  return (agg?.mx ?? 0) + 1;
-}
-
-export async function repoInsertRound(input: {
-  workoutLogId: string;
-  roundIndex?: number | null;
-  durationS?: string | null;
-  repsTotal?: number | null;
-  notes?: string | null;
-}) {
-  const finalIdx =
-    input.roundIndex ?? (await repoNextRoundIndex(input.workoutLogId));
-  const [row] = await db
-    .insert(workoutRoundLog)
-    .values({
-      workoutLogId: input.workoutLogId,
-      roundIndex: finalIdx,
-      durationS: input.durationS ?? null,
-      repsTotal: input.repsTotal ?? null,
-      notes: input.notes ?? null,
-    })
-    .returning();
-  return row!;
-}
-
-export async function repoUpdateRound(
-  id: string,
-  patch: {
-    roundIndex?: number | null;
-    durationS?: string | null;
-    repsTotal?: number | null;
-    notes?: string | null;
-  }
-) {
-  const [row] = await db
-    .update(workoutRoundLog)
-    .set({
-      roundIndex: patch.roundIndex ?? undefined,
-      durationS: patch.durationS ?? undefined,
-      repsTotal: patch.repsTotal ?? undefined,
-      notes: patch.notes ?? undefined,
-    })
-    .where(eq(workoutRoundLog.id, id))
-    .returning();
-  return row ?? null;
-}
-
-export async function repoDeleteRound(id: string) {
-  await db.delete(workoutRoundLog).where(eq(workoutRoundLog.id, id));
-}
-
-export async function repoListRounds(workoutLogId: string) {
-  return db
-    .select()
-    .from(workoutRoundLog)
-    .where(eq(workoutRoundLog.workoutLogId, workoutLogId))
-    .orderBy(asc(workoutRoundLog.roundIndex));
-}
-
-export async function repoGetEntryById(id: string) {
-  const [row] = await db
-    .select()
-    .from(workoutLogEntry)
-    .where(eq(workoutLogEntry.id, id))
-    .limit(1);
-  return row ?? null;
-}
-
-export async function repoGetRoundById(id: string) {
-  const [row] = await db
-    .select()
-    .from(workoutRoundLog)
-    .where(eq(workoutRoundLog.id, id))
-    .limit(1);
-  return row ?? null;
+function mapWorkoutRoundRow(
+  r: typeof workoutRoundLog.$inferSelect
+): TWorkoutRoundRow {
+  return {
+    id: r.id,
+    workoutLogId: r.workoutLogId,
+    roundIndex: r.roundIndex,
+    durationS: r.durationS != null ? Number(r.durationS) : null,
+    repsTotal: r.repsTotal ?? null,
+    notes: r.notes ?? null,
+  };
 }

@@ -1,121 +1,241 @@
-import { db } from "@/infrastructure/db/client";
-import { intervalLog } from "@/infrastructure/db/schema";
-import { and, asc, eq, max } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
+import {
+  intervalLog,
+  session as SessionTbl,
+  type intervalLog as IntervalTbl,
+} from "@/infrastructure/db/schema";
+import type { TIntervalRow, TListIntervalsInput } from "./dto";
 
-export async function repoListIntervalsBySession(sessionId: string) {
-  return db
-    .select()
-    .from(intervalLog)
-    .where(eq(intervalLog.sessionId, sessionId))
-    .orderBy(asc(intervalLog.sessionBlockId), asc(intervalLog.intervalIndex));
-}
+const toDbNumeric = (v: number | null | undefined) =>
+  v === undefined ? undefined : v === null ? null : String(v);
 
-export async function repoListIntervalsByWorkoutLogSessionBlock(
-  sessionId: string,
-  sessionBlockId?: string | null
-) {
-  if (sessionBlockId) {
-    return db
-      .select()
-      .from(intervalLog)
-      .where(
-        and(
-          eq(intervalLog.sessionId, sessionId),
-          eq(intervalLog.sessionBlockId, sessionBlockId)
-        )
-      )
-      .orderBy(asc(intervalLog.intervalIndex));
-  }
-  return repoListIntervalsBySession(sessionId);
-}
-
-export async function repoGetIntervalById(id: string) {
-  const [row] = await db
-    .select()
-    .from(intervalLog)
-    .where(eq(intervalLog.id, id))
-    .limit(1);
-  return row ?? null;
-}
-
-export async function repoNextIntervalIndex(
-  sessionBlockId: string | null,
-  sessionId: string
-) {
-  const where = sessionBlockId
-    ? and(
-        eq(intervalLog.sessionId, sessionId),
-        eq(intervalLog.sessionBlockId, sessionBlockId)
-      )
-    : eq(intervalLog.sessionId, sessionId);
-
-  const [agg] = await db
-    .select({ mx: max(intervalLog.intervalIndex).as("mx") })
-    .from(intervalLog)
-    .where(where);
-  return (agg?.mx ?? 0) + 1;
-}
-
-export async function repoInsertInterval(input: {
-  sessionId: string;
-  sessionBlockId?: string | null;
-  exerciseId?: string | null;
-  intervalIndex?: number | null;
-  targetValue?: any;
-  actualValue?: any;
-  durationS?: string | null;
-  notes?: string | null;
-}) {
-  const idx =
-    input.intervalIndex ??
-    (await repoNextIntervalIndex(
-      input.sessionBlockId ?? null,
-      input.sessionId
-    ));
-  const [row] = await db
-    .insert(intervalLog)
-    .values({
-      sessionId: input.sessionId,
-      sessionBlockId: input.sessionBlockId ?? null,
-      exerciseId: input.exerciseId ?? null,
-      intervalIndex: idx,
-      targetValue: input.targetValue ?? null,
-      actualValue: input.actualValue ?? null,
-      durationS: input.durationS ?? null,
-      notes: input.notes ?? null,
-    })
-    .returning();
-  return row!;
-}
-
-export async function repoUpdateInterval(
-  id: string,
-  patch: {
+export interface IntervalsRepository {
+  list(input: TListIntervalsInput): Promise<TIntervalRow[]>;
+  get(input: {
+    orgId: string;
+    athleteId: string;
+    sessionId: string;
+    intervalLogId: string;
+  }): Promise<TIntervalRow | null>;
+  create(input: {
+    orgId: string;
+    athleteId: string;
+    sessionId: string;
+    sessionBlockId?: string;
+    exerciseId?: string;
+    intervalIndex: number;
+    targetValue?: unknown;
+    durationS?: number;
+    notes?: string;
+  }): Promise<TIntervalRow>;
+  update(input: {
+    orgId: string;
+    athleteId: string;
+    sessionId: string;
+    intervalLogId: string;
     sessionBlockId?: string | null;
     exerciseId?: string | null;
-    intervalIndex?: number | null;
-    targetValue?: any;
-    actualValue?: any;
-    durationS?: string | null;
+    intervalIndex?: number;
+    targetValue?: unknown | null;
+    actualValue?: unknown | null;
+    durationS?: number | null;
     notes?: string | null;
-  }
-) {
-  const [row] = await db
-    .update(intervalLog)
-    .set({
-      sessionBlockId: patch.sessionBlockId ?? undefined,
-      exerciseId: patch.exerciseId ?? undefined,
-      intervalIndex: patch.intervalIndex ?? undefined,
-      targetValue: patch.targetValue ?? undefined,
-      actualValue: patch.actualValue ?? undefined,
-      durationS: patch.durationS ?? undefined,
-      notes: patch.notes ?? undefined,
-    })
-    .where(eq(intervalLog.id, id))
-    .returning();
-  return row ?? null;
+  }): Promise<TIntervalRow>;
+  delete(input: {
+    orgId: string;
+    athleteId: string;
+    sessionId: string;
+    intervalLogId: string;
+  }): Promise<void>;
 }
 
-export async function repoDeleteInterval(id: string) {
-  await db.delete(intervalLog).where(eq(intervalLog.id, id));
+export function makeIntervalsRepository(
+  database = defaultDatabase
+): IntervalsRepository {
+  return {
+    async list({ orgId, athleteId, sessionId, sessionBlockId }) {
+      const [sess] = await database
+        .select({ id: SessionTbl.id })
+        .from(SessionTbl)
+        .where(
+          and(
+            eq(SessionTbl.id, sessionId),
+            eq(SessionTbl.orgId, orgId),
+            eq(SessionTbl.athleteId, athleteId)
+          )
+        )
+        .limit(1);
+
+      if (!sess) return [];
+
+      const where = and(
+        eq(intervalLog.sessionId, sessionId),
+        sessionBlockId
+          ? eq(intervalLog.sessionBlockId, sessionBlockId)
+          : sql`true`
+      );
+
+      const rows = await database
+        .select()
+        .from(intervalLog)
+        .where(where)
+        .orderBy(intervalLog.intervalIndex);
+
+      return rows.map(mapIntervalRow);
+    },
+
+    async get({ orgId, athleteId, sessionId, intervalLogId }) {
+      const rows = await database
+        .select({
+          il: intervalLog,
+        })
+        .from(intervalLog)
+        .innerJoin(SessionTbl, eq(SessionTbl.id, intervalLog.sessionId))
+        .where(
+          and(
+            eq(intervalLog.id, intervalLogId),
+            eq(intervalLog.sessionId, sessionId),
+            eq(SessionTbl.orgId, orgId),
+            eq(SessionTbl.athleteId, athleteId)
+          )
+        )
+        .limit(1);
+
+      const row = rows[0]?.il;
+      return row ? mapIntervalRow(row) : null;
+    },
+
+    async create({
+      orgId,
+      athleteId,
+      sessionId,
+      sessionBlockId,
+      exerciseId,
+      intervalIndex,
+      targetValue,
+      durationS,
+      notes,
+    }) {
+      const [sess] = await database
+        .select({ id: SessionTbl.id })
+        .from(SessionTbl)
+        .where(
+          and(
+            eq(SessionTbl.id, sessionId),
+            eq(SessionTbl.orgId, orgId),
+            eq(SessionTbl.athleteId, athleteId)
+          )
+        )
+        .limit(1);
+      if (!sess) {
+        throw new Error("Session not found for given org/athlete.");
+      }
+
+      const [created] = await database
+        .insert(intervalLog)
+        .values({
+          sessionId,
+          sessionBlockId: sessionBlockId ?? null,
+          exerciseId: exerciseId ?? null,
+          intervalIndex,
+          targetValue: targetValue ?? null,
+          actualValue: null,
+          durationS: toDbNumeric(durationS),
+          notes: notes ?? null,
+        })
+        .returning();
+
+      return mapIntervalRow(created);
+    },
+
+    async update({
+      orgId,
+      athleteId,
+      sessionId,
+      intervalLogId,
+      sessionBlockId,
+      exerciseId,
+      intervalIndex,
+      targetValue,
+      actualValue,
+      durationS,
+      notes,
+    }) {
+      const existing = await this.get({
+        orgId,
+        athleteId,
+        sessionId,
+        intervalLogId,
+      });
+      if (!existing) {
+        throw new Error("Interval not found or access denied.");
+      }
+
+      const [updated] = await database
+        .update(intervalLog)
+        .set({
+          sessionBlockId:
+            sessionBlockId === undefined
+              ? sql`${intervalLog.sessionBlockId}`
+              : (sessionBlockId as any),
+          exerciseId:
+            exerciseId === undefined
+              ? sql`${intervalLog.exerciseId}`
+              : (exerciseId as any),
+          intervalIndex:
+            intervalIndex === undefined
+              ? sql`${intervalLog.intervalIndex}`
+              : intervalIndex,
+          targetValue:
+            targetValue === undefined
+              ? sql`${intervalLog.targetValue}`
+              : (targetValue as any),
+          actualValue:
+            actualValue === undefined
+              ? sql`${intervalLog.actualValue}`
+              : (actualValue as any),
+          durationS:
+            durationS === undefined
+              ? sql`${intervalLog.durationS}`
+              : toDbNumeric(durationS),
+          notes:
+            notes === undefined ? sql`${intervalLog.notes}` : (notes as any),
+        })
+        .where(eq(intervalLog.id, intervalLogId))
+        .returning();
+
+      return mapIntervalRow(updated!);
+    },
+
+    async delete({ orgId, athleteId, sessionId, intervalLogId }) {
+      const existing = await this.get({
+        orgId,
+        athleteId,
+        sessionId,
+        intervalLogId,
+      });
+      if (!existing) return;
+
+      await database
+        .delete(intervalLog)
+        .where(eq(intervalLog.id, intervalLogId));
+    },
+  };
 }
+
+function mapIntervalRow(r: typeof IntervalTbl.$inferSelect): TIntervalRow {
+  return {
+    id: r.id,
+    sessionId: r.sessionId,
+    sessionBlockId: r.sessionBlockId ?? null,
+    exerciseId: r.exerciseId ?? null,
+    intervalIndex: r.intervalIndex,
+    targetValue: r.targetValue ?? null,
+    actualValue: r.actualValue ?? null,
+    durationS: r.durationS === null ? null : Number(r.durationS as any),
+    notes: r.notes ?? null,
+  };
+}
+
+export const intervalsRepository = makeIntervalsRepository();

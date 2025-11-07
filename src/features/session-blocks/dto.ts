@@ -1,16 +1,59 @@
 import { z } from "zod";
 
-export const CreateBlockDto = z.object({
-  blockType: z.string().trim().optional(),
-  title: z.string().trim().optional(),
-  notes: z.string().trim().optional(),
+export const ZSessionBlockRow = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  blockIndex: z.number(),
+  blockType: z.string().nullish(),
+  title: z.string().nullish(),
+  notes: z.string().nullish(),
 });
-export type CreateBlockDto = z.infer<typeof CreateBlockDto>;
+export type TSessionBlockRow = z.infer<typeof ZSessionBlockRow>;
 
-export const UpdateBlockDto = z.object({
-  blockType: z.string().trim().optional(),
-  title: z.string().trim().optional(),
-  notes: z.string().trim().optional(),
-  blockIndex: z.coerce.number().int().min(0).optional(),
+export const ZListBlocksInput = z.object({
+  orgId: z.string(),
+  athleteId: z.string(),
+  sessionId: z.string(),
+  limit: z.number().int().positive().max(200).optional(),
+  offset: z.number().int().nonnegative().optional(),
 });
-export type UpdateBlockDto = z.infer<typeof UpdateBlockDto>;
+export type TListBlocksInput = z.infer<typeof ZListBlocksInput>;
+
+export const ZGetBlockInput = z.object({
+  orgId: z.string(),
+  athleteId: z.string(),
+  sessionId: z.string(),
+  blockId: z.string(),
+});
+export type TGetBlockInput = z.infer<typeof ZGetBlockInput>;
+
+export const ZCreateBlockInput = z.object({
+  orgId: z.string(),
+  athleteId: z.string(),
+  sessionId: z.string(),
+  blockIndex: z.number().int().nonnegative(),
+  blockType: z.string().optional(),
+  title: z.string().optional(),
+  notes: z.string().optional(),
+});
+export type TCreateBlockInput = z.infer<typeof ZCreateBlockInput>;
+
+export const ZUpdateBlockInput = z.object({
+  orgId: z.string(),
+  athleteId: z.string(),
+  sessionId: z.string(),
+  blockId: z.string(),
+  blockIndex: z.number().int().nonnegative().optional(),
+  blockType: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+export type TUpdateBlockInput = z.infer<typeof ZUpdateBlockInput>;
+
+export const ZDeleteBlockInput = z.object({
+  orgId: z.string(),
+  athleteId: z.string(),
+  sessionId: z.string(),
+  blockId: z.string(),
+});
+export type TDeleteBlockInput = z.infer<typeof ZDeleteBlockInput>;

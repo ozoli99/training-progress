@@ -1,72 +1,63 @@
-import { repoGetSessionById } from "@/features/sessions/repository";
+import { AppError } from "@/shared/errors";
 import {
-  repoDeleteBlock,
-  repoGetBlock,
-  repoInsertBlock,
-  repoListBlocksBySession,
-  repoUpdateBlock,
-} from "./repository";
+  ZListBlocksInput,
+  ZGetBlockInput,
+  ZCreateBlockInput,
+  ZUpdateBlockInput,
+  ZDeleteBlockInput,
+  type TSessionBlockRow,
+} from "./dto";
+import { sessionBlocksRepository } from "./repository";
 
-export async function listBlocksService(sessionId: string) {
-  return repoListBlocksBySession(sessionId);
+export interface SessionBlocksService {
+  list(input: unknown): Promise<TSessionBlockRow[]>;
+  get(input: unknown): Promise<TSessionBlockRow | null>;
+  create(input: unknown): Promise<TSessionBlockRow>;
+  update(input: unknown): Promise<TSessionBlockRow>;
+  delete(input: unknown): Promise<void>;
 }
 
-export async function createBlockService(
-  ctx: { orgId: string; athleteId: string },
-  sessionId: string,
-  input: {
-    blockType?: string;
-    title?: string;
-    notes?: string;
-  }
-) {
-  const s = await repoGetSessionById(sessionId);
-  if (!s) throw new Error("Session not found");
-  if (s.orgId !== ctx.orgId || s.athleteId !== ctx.athleteId)
-    throw new Error("Forbidden");
-  return repoInsertBlock({
-    sessionId,
-    blockType: input.blockType ?? null,
-    title: input.title ?? null,
-    notes: input.notes ?? null,
-  });
+export function makeSessionBlocksService(
+  repo = sessionBlocksRepository
+): SessionBlocksService {
+  return {
+    async list(input) {
+      const parsed = ZListBlocksInput.parse(input);
+      return repo.list(parsed);
+    },
+    async get(input) {
+      const parsed = ZGetBlockInput.parse(input);
+      return repo.get(parsed);
+    },
+    async create(input) {
+      const parsed = ZCreateBlockInput.parse(input);
+      return repo.create(parsed).catch((e) => {
+        const msg = String(e?.message ?? e);
+        if (msg.includes("ux_session_block")) {
+          throw new AppError.Conflict(
+            "Block index already exists in this session."
+          );
+        }
+        throw e;
+      });
+    },
+    async update(input) {
+      const parsed = ZUpdateBlockInput.parse(input);
+      return repo.update(parsed).catch((e) => {
+        const msg = String(e?.message ?? e);
+        if (msg.includes("ux_session_block")) {
+          throw new AppError.Conflict(
+            "Block index already exists in this session."
+          );
+        }
+        throw e;
+      });
+    },
+    async delete(input) {
+      const parsed = ZDeleteBlockInput.parse(input);
+      return repo.delete(parsed);
+    },
+  };
 }
 
-export async function updateBlockService(
-  ctx: { orgId: string; athleteId: string },
-  blockId: string,
-  patch: {
-    blockType?: string;
-    title?: string;
-    notes?: string;
-    blockIndex?: number;
-  }
-) {
-  const b = await repoGetBlock(blockId);
-  if (!b) throw new Error("Block not found");
-  const s = await repoGetSessionById(b.sessionId);
-  if (!s) throw new Error("Session not found");
-  if (s.orgId !== ctx.orgId || s.athleteId !== ctx.athleteId)
-    throw new Error("Forbidden");
-  const updated = await repoUpdateBlock(blockId, {
-    blockType: patch.blockType ?? null,
-    title: patch.title ?? null,
-    notes: patch.notes ?? null,
-    blockIndex: patch.blockIndex,
-  });
-  if (!updated) throw new Error("Update failed");
-  return updated;
-}
-
-export async function deleteBlockService(
-  ctx: { orgId: string; athleteId: string },
-  blockId: string
-) {
-  const b = await repoGetBlock(blockId);
-  if (!b) throw new Error("Block not found");
-  const s = await repoGetSessionById(b.sessionId);
-  if (!s) throw new Error("Session not found");
-  if (s.orgId !== ctx.orgId || s.athleteId !== ctx.athleteId)
-    throw new Error("Forbidden");
-  await repoDeleteBlock(blockId);
-}
+export const sessionBlocksService = makeSessionBlocksService();

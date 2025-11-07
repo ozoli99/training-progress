@@ -1,128 +1,50 @@
-import { AppError } from "@/shared/errors";
+import { z } from "zod";
 import {
-  insertExercise,
-  getExerciseById,
-  getExerciseByOrgAndName,
-  listExercises as repoListExercises,
-  updateExerciseById,
-  deleteExerciseById,
-  listExerciseMovementGroups,
-  addExerciseMovementGroup,
-  removeExerciseMovementGroup,
-} from "./repository";
-import type { CreateExerciseInput, UpdateExerciseInput } from "./dto";
+  ExerciseRow,
+  CreateExerciseInput,
+  UpdateExerciseInput,
+  DeleteExerciseInput,
+  ListExercisesInput,
+} from "./dto";
+import { exercisesRepository, type ExercisesRepository } from "./repository";
 
-const toIso = (d: any) =>
-  typeof d === "string" ? d : (d?.toISOString?.() ?? new Date(d).toISOString());
+const GetInput = z.object({
+  orgId: z.string().uuid(),
+  exerciseId: z.string().uuid(),
+});
 
-function toExerciseResponse(
-  row: NonNullable<Awaited<ReturnType<typeof getExerciseById>>>
-) {
+export function makeExercisesService(repository: ExercisesRepository) {
   return {
-    id: row.id,
-    orgId: row.orgId,
-    name: row.name,
-    category: row.category ?? null,
-    modality: row.modality ?? null,
-    globalExerciseId: row.globalExerciseId ?? null,
-    createdAt: toIso(row.createdAt),
-    updatedAt: toIso(row.updatedAt),
+    async list(input: unknown) {
+      const data = ListExercisesInput.parse(input);
+      const rows = await repository.list(data);
+      return rows.map((r) => ExerciseRow.parse(r));
+    },
+
+    async get(input: unknown) {
+      const data = GetInput.parse(input);
+      const row = await repository.get(data);
+      return row ? ExerciseRow.parse(row) : null;
+    },
+
+    async create(input: unknown) {
+      const data = CreateExerciseInput.parse(input);
+      const row = await repository.create(data);
+      return ExerciseRow.parse(row);
+    },
+
+    async update(input: unknown) {
+      const data = UpdateExerciseInput.parse(input);
+      const row = await repository.update(data);
+      return ExerciseRow.parse(row);
+    },
+
+    async delete(input: unknown) {
+      const data = DeleteExerciseInput.parse(input);
+      await repository.delete(data);
+    },
   };
 }
 
-export async function createExerciseService(
-  orgId: string,
-  input: CreateExerciseInput
-) {
-  const clash = await getExerciseByOrgAndName(orgId, input.name);
-  if (clash)
-    throw new AppError.Conflict(
-      "Exercise with this name already exists in the org"
-    );
-
-  const row = await insertExercise({
-    orgId,
-    name: input.name,
-    category: input.category,
-    modality: input.modality,
-    globalExerciseId: input.globalExerciseId ?? null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any);
-
-  return toExerciseResponse(row);
-}
-
-export async function fetchExerciseService(exerciseId: string) {
-  const row = await getExerciseById(exerciseId);
-  if (!row) throw new AppError.NotFound("Exercise not found");
-  return toExerciseResponse(row);
-}
-
-export async function listExercisesService(
-  orgId: string,
-  params: {
-    limit: number;
-    offset: number;
-    q?: string;
-    category?: string;
-    modality?: string;
-  }
-) {
-  const rows = await repoListExercises({ orgId, ...params });
-  return rows.map(toExerciseResponse);
-}
-
-export async function patchExerciseService(
-  exerciseId: string,
-  patch: UpdateExerciseInput
-) {
-  const existing = await getExerciseById(exerciseId);
-  if (!existing) throw new AppError.NotFound("Exercise not found");
-
-  if (patch.name && patch.name !== existing.name) {
-    const clash = await getExerciseByOrgAndName(existing.orgId, patch.name);
-    if (clash)
-      throw new AppError.Conflict(
-        "Exercise with this name already exists in the org"
-      );
-  }
-
-  const updated = await updateExerciseById(exerciseId, {
-    name: patch.name ?? existing.name,
-    category: patch.category ?? existing.category,
-    modality: patch.modality ?? existing.modality,
-    globalExerciseId:
-      patch.globalExerciseId === undefined
-        ? existing.globalExerciseId
-        : patch.globalExerciseId,
-  } as any);
-  if (!updated) throw new AppError.NotFound("Exercise not found");
-
-  return toExerciseResponse(updated);
-}
-
-export async function removeExerciseService(exerciseId: string) {
-  const existing = await getExerciseById(exerciseId);
-  if (!existing) throw new AppError.NotFound("Exercise not found");
-  await deleteExerciseById(exerciseId);
-}
-
-export async function listExerciseMovementGroupsService(exerciseId: string) {
-  return await listExerciseMovementGroups(exerciseId);
-}
-
-export async function addExerciseMovementGroupService(
-  exerciseId: string,
-  movementGroupId: string
-) {
-  await addExerciseMovementGroup(exerciseId, movementGroupId);
-  return await listExerciseMovementGroups(exerciseId);
-}
-
-export async function removeExerciseMovementGroupService(
-  exerciseId: string,
-  movementGroupId: string
-) {
-  await removeExerciseMovementGroup(exerciseId, movementGroupId);
-}
+export const exercisesService = makeExercisesService(exercisesRepository);
+export type ExercisesService = ReturnType<typeof makeExercisesService>;
