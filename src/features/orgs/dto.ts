@@ -1,52 +1,104 @@
 import { z } from "zod";
 
-export const CreateOrgDto = z.object({
-  name: z.string().min(1).max(200),
-  ownerUserId: z.string().uuid().optional(),
+export const UUID = z.string().uuid();
+
+export const OrgIdInput = z.object({
+  orgId: UUID,
+});
+
+export const EnsureUserAccountInput = z.object({
+  clerkUserId: z.string().min(1),
+  email: z.string().email(),
+  fullName: z.string().optional(),
+  avatarUrl: z.string().url().optional(),
+});
+
+export const UpsertOrgFromClerkInput = z.object({
+  clerkOrgId: z.string().min(1),
+  name: z.string().min(1),
+  ownerUserId: UUID.optional(),
+});
+
+export const CreateOrgInput = z.object({
+  name: z.string().min(1),
+  ownerUserId: UUID.optional(),
   clerkOrgId: z.string().optional(),
 });
-export type CreateOrgInput = z.infer<typeof CreateOrgDto>;
 
-export const UpdateOrgDto = z.object({
-  name: z.string().min(1).max(200).optional(),
-  ownerUserId: z.string().uuid().optional(),
-  clerkOrgId: z.string().optional(),
-});
-export type UpdateOrgInput = z.infer<typeof UpdateOrgDto>;
+export const ListUserOrgsInput = z
+  .object({
+    userId: UUID.optional(),
+    clerkUserId: z.string().optional(),
+  })
+  .refine((v) => v.userId || v.clerkUserId, {
+    message: "Provide either userId or clerkUserId",
+  });
 
-export const ListOrgsQuery = z.object({
-  limit: z.coerce.number().min(1).max(100).default(20),
-  offset: z.coerce.number().min(0).default(0),
-  ownerUserId: z.string().uuid().optional(),
-  clerkOrgId: z.string().optional(),
-  q: z.string().optional(),
-});
-export type ListOrgsQueryT = z.infer<typeof ListOrgsQuery>;
-
-export const OrgResponse = z.object({
-  id: z.string().uuid(),
+export const OrgRow = z.object({
+  id: UUID,
   name: z.string(),
-  ownerUserId: z.string().uuid().nullable(),
-  clerkOrgId: z.string().nullable(),
+  clerkOrgId: z.string().nullish(),
+  ownerUserId: UUID.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
-export type OrgResponseT = z.infer<typeof OrgResponse>;
 
-export const AddMemberDto = z.object({
-  userId: z.string().uuid(),
+export const OrgSettingsRow = z.object({
+  orgId: UUID,
+  units: z.enum(["metric", "imperial"]).default("metric"),
+  timezone: z.string().default("UTC"),
+  defaultTrainingLocationId: UUID.nullable().default(null),
+  preferences: z.unknown().nullable().default({}),
+  updatedAt: z.string(),
+});
+
+export const OrgWithSettings = OrgRow.extend({
+  settings: OrgSettingsRow.nullable(),
+});
+
+export const OrgMemberRow = z.object({
+  id: UUID,
+  orgId: UUID,
+  userId: UUID,
+  role: z.enum(["owner", "admin", "coach", "athlete"]),
+  clerkMembershipId: z.string().nullish(),
+  email: z.string().email().nullable(),
+  fullName: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const OrgMembersResponse = z.object({
+  items: z.array(OrgMemberRow),
+});
+
+export const SetOrgSettingsInput = OrgIdInput.extend({
+  units: z.enum(["metric", "imperial"]).optional(),
+  timezone: z.string().optional(),
+  defaultTrainingLocationId: UUID.nullable().optional(),
+  preferences: z.unknown().optional(),
+});
+
+export const AddMemberInput = z.object({
+  orgId: UUID,
+  userId: UUID,
   role: z.enum(["owner", "admin", "coach", "athlete"]),
   clerkMembershipId: z.string().optional(),
 });
-export type AddMemberInput = z.infer<typeof AddMemberDto>;
 
-export const UpdateMemberDto = z.object({
-  role: z.enum(["owner", "admin", "coach", "athlete"]).optional(),
+export const RemoveMemberInput = z.object({
+  orgId: UUID,
+  userId: UUID,
 });
-export type UpdateMemberInput = z.infer<typeof UpdateMemberDto>;
 
-export const OrgIdParam = z.object({ id: z.string().uuid() });
-export const OrgMemberParams = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
+export const ChangeMemberRoleInput = z.object({
+  orgId: UUID,
+  userId: UUID,
+  role: z.enum(["owner", "admin", "coach", "athlete"]),
 });
+
+export type TOrgRow = z.infer<typeof OrgRow>;
+export type TOrgWithSettings = z.infer<typeof OrgWithSettings>;
+export type TOrgSettingsRow = z.infer<typeof OrgSettingsRow>;
+export type TOrgMemberRow = z.infer<typeof OrgMemberRow>;

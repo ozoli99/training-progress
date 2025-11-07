@@ -1,191 +1,369 @@
-import { db } from "@/infrastructure/db/client";
+import { and, eq, sql } from "drizzle-orm";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
 import {
   org,
-  orgSettings,
   orgMember,
+  orgSettings,
   userAccount,
-  type org as orgTable,
+  type org as OrgTbl,
 } from "@/infrastructure/db/schema";
-import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import { and, eq, like, sql } from "drizzle-orm";
+import type {
+  TOrgMemberRow,
+  TOrgRow,
+  TOrgSettingsRow,
+  TOrgWithSettings,
+} from "./dto";
 
-export type OrgRow = InferSelectModel<typeof org>;
-export type NewOrgRow = InferInsertModel<typeof org>;
+export interface OrgsRepository {
+  ensureUserAccount(input: {
+    clerkUserId: string;
+    email: string;
+    fullName?: string;
+    avatarUrl?: string;
+  }): Promise<string>;
 
-export type OrgSettingsRow = InferSelectModel<typeof orgSettings>;
-export type NewOrgSettingsRow = InferInsertModel<typeof orgSettings>;
+  upsertOrgFromClerk(input: {
+    clerkOrgId: string;
+    name: string;
+    ownerUserId?: string;
+  }): Promise<TOrgRow>;
 
-export type OrgMemberRow = InferSelectModel<typeof orgMember>;
-export type NewOrgMemberRow = InferInsertModel<typeof orgMember>;
+  createOrg(input: {
+    name: string;
+    ownerUserId?: string;
+    clerkOrgId?: string;
+  }): Promise<TOrgRow>;
 
-export async function insertOrg(values: NewOrgRow): Promise<OrgRow> {
-  const [row] = await db.insert(org).values(values).returning();
-  return row;
+  listOrgsForUser(input: {
+    userId?: string;
+    clerkUserId?: string;
+  }): Promise<TOrgRow[]>;
+
+  getOrgById(orgId: string): Promise<TOrgRow | null>;
+  getOrgWithSettings(orgId: string): Promise<TOrgWithSettings | null>;
+  getMembers(orgId: string): Promise<TOrgMemberRow[]>;
+
+  setOrgSettings(input: {
+    orgId: string;
+    units?: "metric" | "imperial";
+    timezone?: string;
+    defaultTrainingLocationId?: string | null;
+    preferences?: unknown;
+  }): Promise<TOrgSettingsRow>;
+
+  addMember(input: {
+    orgId: string;
+    userId: string;
+    role: "owner" | "admin" | "coach" | "athlete";
+    clerkMembershipId?: string;
+  }): Promise<void>;
+
+  changeMemberRole(input: {
+    orgId: string;
+    userId: string;
+    role: "owner" | "admin" | "coach" | "athlete";
+  }): Promise<void>;
+
+  removeMember(input: { orgId: string; userId: string }): Promise<void>;
 }
 
-export async function updateOrgById(id: string, patch: Partial<OrgRow>) {
-  const [row] = await db
-    .update(org)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(eq(org.id, id))
-    .returning();
-  return row ?? null;
-}
+export function makeOrgsRepository(database = defaultDatabase): OrgsRepository {
+  return {
+    async ensureUserAccount({ clerkUserId, email, fullName, avatarUrl }) {
+      const [existingByClerk] = await database
+        .select({ id: userAccount.id })
+        .from(userAccount)
+        .where(eq(userAccount.clerkUserId, clerkUserId))
+        .limit(1);
 
-export async function getOrgById(id: string): Promise<OrgRow | null> {
-  const rows = await db.select().from(org).where(eq(org.id, id)).limit(1);
-  return rows[0] ?? null;
-}
+      if (existingByClerk?.id) {
+        await database
+          .update(userAccount)
+          .set({
+            email,
+            fullName: fullName ?? null,
+            avatarUrl: avatarUrl ?? null,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(userAccount.id, existingByClerk.id));
+        return existingByClerk.id;
+      }
 
-export async function getOrgByClerkId(
-  clerkOrgId: string
-): Promise<OrgRow | null> {
-  const rows = await db
-    .select()
-    .from(org)
-    .where(eq(org.clerkOrgId, clerkOrgId))
-    .limit(1);
-  return rows[0] ?? null;
-}
+      const [existingByEmail] = await database
+        .select({ id: userAccount.id })
+        .from(userAccount)
+        .where(eq(userAccount.email, email))
+        .limit(1);
 
-export async function listOrgs(opts: {
-  limit: number;
-  offset: number;
-  ownerUserId?: string;
-  clerkOrgId?: string;
-  q?: string;
-}): Promise<OrgRow[]> {
-  const filters = [
-    opts.ownerUserId ? eq(org.ownerUserId, opts.ownerUserId) : undefined,
-    opts.clerkOrgId ? eq(org.clerkOrgId, opts.clerkOrgId) : undefined,
-    opts.q ? like(org.name, `%${opts.q}%`) : undefined,
-  ].filter(Boolean) as any[];
+      if (existingByEmail?.id) {
+        await database
+          .update(userAccount)
+          .set({
+            clerkUserId,
+            fullName: fullName ?? null,
+            avatarUrl: avatarUrl ?? null,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(userAccount.id, existingByEmail.id));
+        return existingByEmail.id;
+      }
 
-  return db
-    .select()
-    .from(org)
-    .where(filters.length ? and(...filters) : undefined)
-    .orderBy(org.createdAt)
-    .limit(opts.limit)
-    .offset(opts.offset);
-}
+      const [inserted] = await database
+        .insert(userAccount)
+        .values({
+          clerkUserId,
+          email,
+          fullName: fullName ?? null,
+          avatarUrl: avatarUrl ?? null,
+        })
+        .returning({ id: userAccount.id });
 
-export async function deleteOrgById(id: string) {
-  await db.delete(org).where(eq(org.id, id));
-}
+      return inserted.id;
+    },
 
-export async function upsertOrgSettings(
-  values: NewOrgSettingsRow
-): Promise<OrgSettingsRow> {
-  const [row] = await db
-    .insert(orgSettings)
-    .values(values)
-    .onConflictDoUpdate({
-      target: orgSettings.orgId,
-      set: {
-        units: values.units ?? sql`excluded.units`,
-        timezone: values.timezone ?? sql`excluded.timezone`,
-        defaultTrainingLocationId:
-          values.defaultTrainingLocationId ??
-          sql`excluded.default_training_location_id`,
-        preferences: values.preferences ?? sql`excluded.preferences`,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  return row!;
-}
+    async upsertOrgFromClerk({ clerkOrgId, name, ownerUserId }) {
+      const [existing] = await database
+        .select()
+        .from(org)
+        .where(eq(org.clerkOrgId, clerkOrgId))
+        .limit(1);
 
-export async function getOrgSettings(
-  orgId: string
-): Promise<OrgSettingsRow | null> {
-  const rows = await db
-    .select()
-    .from(orgSettings)
-    .where(eq(orgSettings.orgId, orgId))
-    .limit(1);
-  return rows[0] ?? null;
-}
+      if (existing) {
+        const [updated] = await database
+          .update(org)
+          .set({
+            name,
+            ownerUserId: ownerUserId ?? existing.ownerUserId ?? null,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(org.id, existing.id))
+          .returning();
+        return mapOrgRow(updated);
+      }
 
-export async function addMember(
-  values: NewOrgMemberRow
-): Promise<OrgMemberRow> {
-  const [row] = await db.insert(orgMember).values(values).returning();
-  return row!;
-}
+      const [created] = await database
+        .insert(org)
+        .values({
+          name,
+          clerkOrgId,
+          ownerUserId: ownerUserId ?? null,
+        })
+        .returning();
+      await database
+        .insert(orgSettings)
+        .values({ orgId: created.id })
+        .onConflictDoNothing();
+      return mapOrgRow(created);
+    },
 
-export async function getMember(orgId: string, userId: string) {
-  const rows = await db
-    .select()
-    .from(orgMember)
-    .where(and(eq(orgMember.orgId, orgId), eq(orgMember.userId, userId)))
-    .limit(1);
-  return rows[0] ?? null;
-}
+    async createOrg({ name, ownerUserId, clerkOrgId }) {
+      const [created] = await database
+        .insert(org)
+        .values({
+          name,
+          ownerUserId: ownerUserId ?? null,
+          clerkOrgId: clerkOrgId ?? null,
+        })
+        .returning();
 
-export async function updateMember(
-  orgId: string,
-  userId: string,
-  patch: Partial<OrgMemberRow>
-) {
-  const [row] = await db
-    .update(orgMember)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(orgMember.orgId, orgId), eq(orgMember.userId, userId)))
-    .returning();
-  return row ?? null;
-}
+      await database
+        .insert(orgSettings)
+        .values({ orgId: created.id })
+        .onConflictDoNothing();
 
-export async function removeMember(orgId: string, userId: string) {
-  await db
-    .delete(orgMember)
-    .where(and(eq(orgMember.orgId, orgId), eq(orgMember.userId, userId)));
-}
+      return mapOrgRow(created);
+    },
 
-export async function listMembers(orgId: string): Promise<
-  (OrgMemberRow & {
-    user?: { id: string; email: string | null; fullName: string | null };
-  })[]
-> {
-  const rows = await db
-    .select({
-      id: orgMember.id,
-      orgId: orgMember.orgId,
-      userId: orgMember.userId,
-      role: orgMember.role,
-      clerkMembershipId: orgMember.clerkMembershipId,
-      createdAt: orgMember.createdAt,
-      updatedAt: orgMember.updatedAt,
-      user_id: userAccount.id,
-      user_email: userAccount.email,
-      user_full_name: userAccount.fullName,
-    })
-    .from(orgMember)
-    .leftJoin(userAccount, eq(userAccount.id, orgMember.userId))
-    .where(eq(orgMember.orgId, orgId));
+    async listOrgsForUser({ userId, clerkUserId }) {
+      let uid = userId;
+      if (!uid && clerkUserId) {
+        const [u] = await database
+          .select({ id: userAccount.id })
+          .from(userAccount)
+          .where(eq(userAccount.clerkUserId, clerkUserId))
+          .limit(1);
+        uid = u?.id;
+      }
+      if (!uid) return [];
 
-  return rows.map((r) => {
-    const base: OrgMemberRow = {
-      id: r.id,
-      orgId: r.orgId,
-      userId: r.userId,
-      role: r.role,
-      clerkMembershipId: r.clerkMembershipId,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    };
+      const rows = await database
+        .select({
+          id: org.id,
+          name: org.name,
+          clerkOrgId: org.clerkOrgId,
+          ownerUserId: org.ownerUserId,
+          createdAt: org.createdAt,
+          updatedAt: org.updatedAt,
+        })
+        .from(orgMember)
+        .innerJoin(org, eq(org.id, orgMember.orgId))
+        .where(eq(orgMember.userId, uid));
 
-    if (r.user_id) {
+      return rows.map(mapOrgRow);
+    },
+
+    async getOrgById(orgId) {
+      const [row] = await database
+        .select()
+        .from(org)
+        .where(eq(org.id, orgId))
+        .limit(1);
+      return row ? mapOrgRow(row) : null;
+    },
+
+    async getOrgWithSettings(orgId) {
+      const [o] = await database
+        .select()
+        .from(org)
+        .where(eq(org.id, orgId))
+        .limit(1);
+      if (!o) return null;
+
+      const [s] = await database
+        .select()
+        .from(orgSettings)
+        .where(eq(orgSettings.orgId, orgId))
+        .limit(1);
+
       return {
-        ...base,
-        user: {
-          id: r.user_id,
-          email: r.user_email,
-          fullName: r.user_full_name,
-        },
+        ...mapOrgRow(o),
+        settings: s ? mapSettingsRow(s) : null,
       };
-    }
+    },
 
-    return base;
-  });
+    async getMembers(orgId) {
+      const rows = await database
+        .select({
+          id: orgMember.id,
+          orgId: orgMember.orgId,
+          userId: orgMember.userId,
+          role: orgMember.role,
+          clerkMembershipId: orgMember.clerkMembershipId,
+          createdAt: orgMember.createdAt,
+          updatedAt: orgMember.updatedAt,
+          email: userAccount.email,
+          fullName: userAccount.fullName,
+          avatarUrl: userAccount.avatarUrl,
+        })
+        .from(orgMember)
+        .innerJoin(userAccount, eq(userAccount.id, orgMember.userId))
+        .where(eq(orgMember.orgId, orgId));
+      return rows.map((r) => ({
+        id: r.id,
+        orgId: r.orgId,
+        userId: r.userId,
+        role: r.role as TOrgMemberRow["role"],
+        clerkMembershipId: r.clerkMembershipId ?? null,
+        createdAt: String(r.createdAt),
+        updatedAt: String(r.updatedAt),
+        email: r.email ?? null,
+        fullName: r.fullName ?? null,
+        avatarUrl: r.avatarUrl ?? null,
+      }));
+    },
+
+    async setOrgSettings({
+      orgId,
+      units,
+      timezone,
+      defaultTrainingLocationId,
+      preferences,
+    }) {
+      await database
+        .insert(orgSettings)
+        .values({
+          orgId,
+          units: units ?? undefined,
+          timezone: timezone ?? undefined,
+          defaultTrainingLocationId:
+            defaultTrainingLocationId === undefined
+              ? undefined
+              : defaultTrainingLocationId,
+          preferences:
+            preferences === undefined ? undefined : (preferences as any),
+        })
+        .onConflictDoUpdate({
+          target: orgSettings.orgId,
+          set: {
+            units: units === undefined ? sql`${orgSettings.units}` : units,
+            timezone:
+              timezone === undefined ? sql`${orgSettings.timezone}` : timezone,
+            defaultTrainingLocationId:
+              defaultTrainingLocationId === undefined
+                ? sql`${orgSettings.defaultTrainingLocationId}`
+                : defaultTrainingLocationId,
+            preferences:
+              preferences === undefined
+                ? sql`${orgSettings.preferences}`
+                : (preferences as any),
+            updatedAt: sql`now()`,
+          },
+        });
+
+      const [row] = await database
+        .select()
+        .from(orgSettings)
+        .where(eq(orgSettings.orgId, orgId))
+        .limit(1);
+
+      return mapSettingsRow(row!);
+    },
+
+    async addMember({ orgId, userId, role, clerkMembershipId }) {
+      await database
+        .insert(orgMember)
+        .values({
+          orgId,
+          userId,
+          role,
+          clerkMembershipId: clerkMembershipId ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [orgMember.orgId, orgMember.userId],
+          set: {
+            role,
+            clerkMembershipId:
+              clerkMembershipId ?? sql`${orgMember.clerkMembershipId}`,
+            updatedAt: sql`now()`,
+          },
+        });
+    },
+
+    async changeMemberRole({ orgId, userId, role }) {
+      await database
+        .update(orgMember)
+        .set({ role, updatedAt: sql`now()` })
+        .where(and(eq(orgMember.orgId, orgId), eq(orgMember.userId, userId)));
+    },
+
+    async removeMember({ orgId, userId }) {
+      await database
+        .delete(orgMember)
+        .where(and(eq(orgMember.orgId, orgId), eq(orgMember.userId, userId)));
+    },
+  };
 }
+
+function mapOrgRow(r: typeof OrgTbl.$inferSelect): TOrgRow {
+  return {
+    id: r.id,
+    name: r.name,
+    clerkOrgId: r.clerkOrgId ?? null,
+    ownerUserId: r.ownerUserId ?? null,
+    createdAt: String(r.createdAt),
+    updatedAt: String(r.updatedAt),
+  };
+}
+
+function mapSettingsRow(r: typeof orgSettings.$inferSelect): TOrgSettingsRow {
+  return {
+    orgId: r.orgId,
+    units: (r.units as "metric" | "imperial") ?? "metric",
+    timezone: r.timezone ?? "UTC",
+    defaultTrainingLocationId: r.defaultTrainingLocationId ?? null,
+    preferences: (r.preferences as unknown) ?? {},
+    updatedAt: String(r.updatedAt),
+  };
+}
+
+export const orgsRepository = makeOrgsRepository();
