@@ -1,66 +1,67 @@
-"use client";
+import { cookies, headers } from "next/headers";
+import { Suspense } from "react";
+import AppHeaderClient, { type HeaderContext } from "./AppHeaderClient";
 
-import { usePathname } from "next/navigation";
-import { Dumbbell, LineChart, PlusCircle } from "lucide-react";
-import { MobileNav } from "@/components/MobileNav";
-import { Brand } from "./Brand";
-import { DesktopNav } from "./DesktopNav";
-import { QuickActions } from "@/components/QuickActions";
-import { NavItem } from "@/lib/types";
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+async function getHeaderContext(): Promise<HeaderContext> {
+  try {
+    const h = await headers();
+    const c = await cookies();
 
-const NAV: NavItem[] = [
-  { href: "/", label: "Home" },
-  { href: "/dashboard", label: "Dashboard", icon: LineChart },
-  { href: "/log", label: "Add Log", icon: PlusCircle },
-  { href: "/exercises", label: "Exercises", icon: Dumbbell },
-];
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const base = host
+      ? `${proto}://${host}`
+      : (process.env.NEXT_PUBLIC_APP_URL ?? "");
 
-export function AppHeader() {
-  const pathname = usePathname();
+    const res = await fetch(`${base}/api/header-context`, {
+      headers: { cookie: c.toString() },
+      cache: "no-store",
+      next: { revalidate: 10 },
+    });
 
+    if (!res.ok) throw new Error("ctx fetch failed");
+    return (await res.json()) as HeaderContext;
+  } catch {
+    return {
+      user: null,
+      orgs: [],
+      currentOrg: null,
+      role: null,
+      units: "metric",
+      timezone: "UTC",
+      defaultTrainingLocation: null,
+      athletesICanLogFor: [],
+      counts: { plannedToday: 0, unreadMessages: 0 },
+    };
+  }
+}
+
+function HeaderSkeleton() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
-      <div className="mx-auto w-full max-w-6xl px-4 h-14 flex items-center justify-between">
+      <div className="mx-auto w-full max-w-6xl px-3 sm:px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <MobileNav items={NAV} />
-          <Brand />
-          <DesktopNav items={NAV} pathname={pathname} />
+          <div className="h-5 w-16 rounded bg-muted animate-pulse" />
+          <div className="hidden md:flex items-center gap-1">
+            <div className="h-8 w-20 rounded bg-muted animate-pulse" />
+            <div className="h-8 w-24 rounded bg-muted animate-pulse" />
+            <div className="h-8 w-24 rounded bg-muted animate-pulse" />
+          </div>
         </div>
-
         <div className="flex items-center gap-2">
-          <SignedOut>
-            <SignInButton mode="modal" forceRedirectUrl="/dashboard">
-              <button className="inline-flex items-center rounded-md px-3 py-2 text-sm border hover:bg-accent/60">
-                Sign in
-              </button>
-            </SignInButton>
-
-            <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-              <button className="inline-flex items-center rounded-md px-3 py-2 text-sm bg-primary text-primary-foreground hover:opacity-90">
-                Create account
-              </button>
-            </SignUpButton>
-          </SignedOut>
-
-          <SignedIn>
-            <QuickActions />
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "h-8 w-8",
-                },
-              }}
-            />
-          </SignedIn>
+          <div className="h-8 w-24 rounded bg-muted animate-pulse" />
+          <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
         </div>
       </div>
     </header>
+  );
+}
+
+export default async function AppHeader() {
+  const ctx = await getHeaderContext();
+  return (
+    <Suspense fallback={<HeaderSkeleton />}>
+      <AppHeaderClient ctx={ctx} />
+    </Suspense>
   );
 }
