@@ -1,31 +1,40 @@
-import { z } from "zod";
+import type { InferSelectModel } from "drizzle-orm";
+import { athleteProgram } from "@/infrastructure/db/schema";
 
-const ISODate = z
-  .string()
-  .date()
-  .or(z.coerce.date())
-  .transform((v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v));
+export type TAthleteProgramRow = InferSelectModel<typeof athleteProgram>;
 
-export const ListAthleteProgramsQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-  isActive: z.coerce.boolean().optional(),
-  programId: z.string().uuid().optional(),
-  order: z.enum(["asc", "desc"]).default("desc"),
-});
-export type ListAthleteProgramsQuery = z.infer<typeof ListAthleteProgramsQuery>;
+export type TListAthleteProgramsInput = {
+  orgId: string;
+  athleteId: string;
+  activeOnly?: boolean;
+  limit?: number;
+  offset?: number;
+  orderBy?: "startDate" | "createdAt" | "updatedAt" | "currentWeek";
+  order?: "asc" | "desc";
+};
 
-export const CreateAthleteProgramDto = z.object({
-  programId: z.string().uuid(),
-  startDate: ISODate,
-  currentWeek: z.coerce.number().int().min(1).default(1),
-  isActive: z.coerce.boolean().default(true),
-});
-export type CreateAthleteProgramDto = z.infer<typeof CreateAthleteProgramDto>;
+export type TGetAthleteProgramInput = {
+  orgId: string;
+  athleteProgramId: string;
+};
 
-export const UpdateAthleteProgramDto = z.object({
-  startDate: ISODate.optional(),
-  currentWeek: z.coerce.number().int().min(1).optional(),
-  isActive: z.coerce.boolean().optional(),
-});
-export type UpdateAthleteProgramDto = z.infer<typeof UpdateAthleteProgramDto>;
+export type TEnrollAthleteProgramInput = {
+  orgId: string;
+  athleteId: string;
+  programId: string;
+  startDate?: string;
+};
+
+export type TUnenrollAthleteProgramInput = {
+  orgId: string;
+  athleteId: string;
+  programId: string;
+};
+
+export type TPatchAthleteProgramInput = {
+  orgId: string;
+  athleteProgramId: string;
+  currentWeek?: number;
+  isActive?: boolean;
+  startDate?: string;
+};

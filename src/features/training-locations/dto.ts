@@ -1,88 +1,78 @@
 import { z } from "zod";
 
-export const OrgParam = z.object({ id: z.string().uuid() });
-export const LocationParam = z.object({
-  id: z.string().uuid(),
-  locationId: z.string().uuid(),
-});
-export const LocationEquipmentParam = z.object({
-  id: z.string().uuid(),
-  locationId: z.string().uuid(),
-  tleId: z.string().uuid(),
-});
+export const UUID = z.string().uuid();
 
-export const ListLocationsQuery = z.object({
-  limit: z.coerce.number().min(1).max(100).default(20),
-  offset: z.coerce.number().min(0).default(0),
-  q: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-});
-export type ListLocationsQueryT = z.infer<typeof ListLocationsQuery>;
+export const OrgScoped = z.object({ orgId: UUID });
 
-export const ListLocationEquipmentQuery = z.object({
-  limit: z.coerce.number().min(1).max(100).default(50),
-  offset: z.coerce.number().min(0).default(0),
-  q: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-});
-export type ListLocationEquipmentQueryT = z.infer<
-  typeof ListLocationEquipmentQuery
->;
-
-export const CreateLocationDto = z.object({
-  name: z.string().min(1).max(120),
-  address: z.string().optional(),
-  type: z.enum(["gym", "home", "outdoor"]).optional(),
-  isActive: z.boolean().optional(),
-});
-export type CreateLocationInput = z.infer<typeof CreateLocationDto>;
-
-export const UpdateLocationDto = z.object({
-  name: z.string().min(1).max(120).optional(),
-  address: z.string().optional().nullable(),
-  type: z.enum(["gym", "home", "outdoor"]).optional().nullable(),
-  isActive: z.boolean().optional(),
-});
-export type UpdateLocationInput = z.infer<typeof UpdateLocationDto>;
-
-export const CreateLocationEquipmentDto = z.object({
-  name: z.string().min(1).max(120),
-  variant: z.string().min(1).max(120).optional(),
-  specs: z.record(z.string(), z.unknown()).optional(),
-  isActive: z.boolean().optional(),
-});
-export type CreateLocationEquipmentInput = z.infer<
-  typeof CreateLocationEquipmentDto
->;
-
-export const UpdateLocationEquipmentDto = z.object({
-  name: z.string().min(1).max(120).optional(),
-  variant: z.string().min(1).max(120).optional(),
-  specs: z.record(z.string(), z.unknown()).optional(),
-  isActive: z.boolean().optional(),
-});
-export type UpdateLocationEquipmentInput = z.infer<
-  typeof UpdateLocationEquipmentDto
->;
-
-export const LocationResponse = z.object({
-  id: z.string().uuid(),
-  orgId: z.string().uuid(),
+export const TrainingLocationRow = z.object({
+  id: UUID,
+  orgId: UUID,
   name: z.string(),
+  type: z.string().nullable(),
   address: z.string().nullable(),
-  type: z.enum(["gym", "home", "outdoor"]).nullable(),
   isActive: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
-export type LocationResponseT = z.infer<typeof LocationResponse>;
+export type TTrainingLocationRow = z.infer<typeof TrainingLocationRow>;
 
-export const LocationEquipmentResponse = z.object({
-  id: z.string().uuid(),
-  trainingLocationId: z.string().uuid(),
+export const ListTrainingLocationsInput = OrgScoped.extend({
+  q: z.string().optional(),
+  includeInactive: z.boolean().optional(),
+});
+
+export const CreateTrainingLocationInput = OrgScoped.extend({
+  name: z.string().min(1),
+  type: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const UpdateTrainingLocationInput = OrgScoped.extend({
+  locationId: UUID,
+  name: z.string().min(1).optional(),
+  type: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const GetTrainingLocationInput = OrgScoped.extend({
+  locationId: UUID,
+});
+
+export const TrainingLocationEquipmentRow = z.object({
+  id: UUID,
+  trainingLocationId: UUID,
   name: z.string(),
   variant: z.string().nullable(),
-  specs: z.record(z.string(), z.unknown()).nullable(),
+  specs: z.record(z.string(), z.unknown()).nullable().optional(), // jsonb
   isActive: z.boolean(),
 });
-export type LocationEquipmentResponseT = z.infer<
-  typeof LocationEquipmentResponse
+export type TTrainingLocationEquipmentRow = z.infer<
+  typeof TrainingLocationEquipmentRow
 >;
+
+export const ListLocationEquipmentInput = z.object({
+  trainingLocationId: UUID,
+  includeInactive: z.boolean().optional(),
+});
+
+export const AddLocationEquipmentInput = z.object({
+  trainingLocationId: UUID,
+  name: z.string().min(1),
+  variant: z.string().optional().nullable(),
+  specs: z.record(z.string(), z.unknown()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const UpdateLocationEquipmentInput = z.object({
+  equipmentId: UUID,
+  name: z.string().min(1).optional(),
+  variant: z.string().optional().nullable(),
+  specs: z.record(z.string(), z.unknown()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const RemoveLocationEquipmentInput = z.object({
+  equipmentId: UUID,
+});

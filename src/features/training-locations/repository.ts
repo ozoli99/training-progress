@@ -1,141 +1,227 @@
-import { and, eq, ilike, or } from "drizzle-orm";
-import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import { db } from "@/infrastructure/db/client";
+import { and, eq, ilike, sql } from "drizzle-orm";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
 import {
   trainingLocation,
   trainingLocationEquipment,
+  type trainingLocation as TrainingLocationTbl,
+  type trainingLocationEquipment as TLETbl,
 } from "@/infrastructure/db/schema";
+import type {
+  TTrainingLocationRow,
+  TTrainingLocationEquipmentRow,
+} from "./dto";
 
-export type LocationRow = InferSelectModel<typeof trainingLocation>;
-export type NewLocationRow = InferInsertModel<typeof trainingLocation>;
-export type TleRow = InferSelectModel<typeof trainingLocationEquipment>;
-export type NewTleRow = InferInsertModel<typeof trainingLocationEquipment>;
-
-export async function insertLocation(values: NewLocationRow) {
-  const [row] = await db.insert(trainingLocation).values(values).returning();
-  return row!;
+export interface TrainingLocationsRepository {
+  list(input: {
+    orgId: string;
+    q?: string;
+    includeInactive?: boolean;
+  }): Promise<TTrainingLocationRow[]>;
+  get(input: {
+    orgId: string;
+    locationId: string;
+  }): Promise<TTrainingLocationRow | null>;
+  create(input: {
+    orgId: string;
+    name: string;
+    type?: string | null;
+    address?: string | null;
+    isActive?: boolean;
+  }): Promise<TTrainingLocationRow>;
+  update(input: {
+    orgId: string;
+    locationId: string;
+    name?: string;
+    type?: string | null;
+    address?: string | null;
+    isActive?: boolean;
+  }): Promise<TTrainingLocationRow>;
+  listEquipment(input: {
+    trainingLocationId: string;
+    includeInactive?: boolean;
+  }): Promise<TTrainingLocationEquipmentRow[]>;
+  addEquipment(input: {
+    trainingLocationId: string;
+    name: string;
+    variant?: string | null;
+    specs?: Record<string, any>;
+    isActive?: boolean;
+  }): Promise<TTrainingLocationEquipmentRow>;
+  updateEquipment(input: {
+    equipmentId: string;
+    name?: string;
+    variant?: string | null;
+    specs?: Record<string, any>;
+    isActive?: boolean;
+  }): Promise<TTrainingLocationEquipmentRow>;
+  removeEquipment(input: { equipmentId: string }): Promise<void>;
 }
 
-export async function getLocationById(locationId: string) {
-  const rows = await db
-    .select()
-    .from(trainingLocation)
-    .where(eq(trainingLocation.id, locationId))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-export async function getLocationByOrgName(orgId: string, name: string) {
-  const rows = await db
-    .select()
-    .from(trainingLocation)
-    .where(
-      and(eq(trainingLocation.orgId, orgId), eq(trainingLocation.name, name))
-    )
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-export async function updateLocationById(
-  locationId: string,
-  patch: Partial<LocationRow>
-) {
-  const [row] = await db
-    .update(trainingLocation)
-    .set(patch as any)
-    .where(eq(trainingLocation.id, locationId))
-    .returning();
-  return row ?? null;
-}
-
-export async function deleteLocationById(locationId: string) {
-  await db.delete(trainingLocation).where(eq(trainingLocation.id, locationId));
-}
-
-export async function listLocations(opts: {
-  orgId: string;
-  limit: number;
-  offset: number;
-  q?: string;
-  isActive?: boolean;
-}) {
-  const filters = [
-    eq(trainingLocation.orgId, opts.orgId),
-    typeof opts.isActive === "boolean"
-      ? eq(trainingLocation.isActive, opts.isActive)
-      : undefined,
-    opts.q ? ilike(trainingLocation.name, `%${opts.q}%`) : undefined,
-  ].filter(Boolean) as any[];
-
-  return db
-    .select()
-    .from(trainingLocation)
-    .where(and(...filters))
-    .orderBy(trainingLocation.name)
-    .limit(opts.limit)
-    .offset(opts.offset);
-}
-
-export async function insertLocationEquipment(values: NewTleRow) {
-  const [row] = await db
-    .insert(trainingLocationEquipment)
-    .values(values)
-    .returning();
-  return row!;
-}
-
-export async function getLocationEquipmentById(tleId: string) {
-  const rows = await db
-    .select()
-    .from(trainingLocationEquipment)
-    .where(eq(trainingLocationEquipment.id, tleId))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-export async function listLocationEquipment(opts: {
-  locationId: string;
-  limit: number;
-  offset: number;
-  q?: string;
-  isActive?: boolean;
-}) {
-  const f = [
-    eq(trainingLocationEquipment.trainingLocationId, opts.locationId),
-    typeof opts.isActive === "boolean"
-      ? eq(trainingLocationEquipment.isActive, opts.isActive)
-      : undefined,
-    opts.q
-      ? or(
-          ilike(trainingLocationEquipment.name, `%${opts.q}%`),
-          ilike(trainingLocationEquipment.variant, `%${opts.q}%`)
+export function makeTrainingLocationsRepository(
+  database = defaultDatabase
+): TrainingLocationsRepository {
+  return {
+    async list({ orgId, q, includeInactive }) {
+      const rows = await database
+        .select()
+        .from(trainingLocation)
+        .where(
+          and(
+            eq(trainingLocation.orgId, orgId),
+            q ? ilike(trainingLocation.name, `%${q}%`) : sql`true`,
+            includeInactive ? sql`true` : eq(trainingLocation.isActive, true)
+          )
         )
-      : undefined,
-  ].filter(Boolean) as any[];
+        .orderBy(trainingLocation.createdAt);
 
-  return db
-    .select()
-    .from(trainingLocationEquipment)
-    .where(and(...f))
-    .orderBy(trainingLocationEquipment.name, trainingLocationEquipment.variant)
-    .limit(opts.limit)
-    .offset(opts.offset);
+      return rows.map(mapLocationRow);
+    },
+
+    async get({ orgId, locationId }) {
+      const [row] = await database
+        .select()
+        .from(trainingLocation)
+        .where(
+          and(
+            eq(trainingLocation.orgId, orgId),
+            eq(trainingLocation.id, locationId)
+          )
+        )
+        .limit(1);
+      return row ? mapLocationRow(row) : null;
+    },
+
+    async create({ orgId, name, type, address, isActive }) {
+      const [created] = await database
+        .insert(trainingLocation)
+        .values({
+          orgId,
+          name,
+          type: type ?? null,
+          address: address ?? null,
+          isActive: isActive ?? true,
+        })
+        .returning();
+      return mapLocationRow(created);
+    },
+
+    async update({ orgId, locationId, name, type, address, isActive }) {
+      const [updated] = await database
+        .update(trainingLocation)
+        .set({
+          name: name === undefined ? sql`${trainingLocation.name}` : name,
+          type:
+            type === undefined ? sql`${trainingLocation.type}` : (type as any),
+          address:
+            address === undefined
+              ? sql`${trainingLocation.address}`
+              : (address as any),
+          isActive:
+            isActive === undefined
+              ? sql`${trainingLocation.isActive}`
+              : !!isActive,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(trainingLocation.orgId, orgId),
+            eq(trainingLocation.id, locationId)
+          )
+        )
+        .returning();
+      return mapLocationRow(updated!);
+    },
+
+    async listEquipment({ trainingLocationId, includeInactive }) {
+      const rows = await database
+        .select()
+        .from(trainingLocationEquipment)
+        .where(
+          and(
+            eq(
+              trainingLocationEquipment.trainingLocationId,
+              trainingLocationId
+            ),
+            includeInactive
+              ? sql`true`
+              : eq(trainingLocationEquipment.isActive, true)
+          )
+        );
+      return rows.map(mapTLERow);
+    },
+
+    async addEquipment({ trainingLocationId, name, variant, specs, isActive }) {
+      const [row] = await database
+        .insert(trainingLocationEquipment)
+        .values({
+          trainingLocationId,
+          name,
+          variant: variant ?? null,
+          specs: (specs ?? null) as any,
+          isActive: isActive ?? true,
+        })
+        .returning();
+      return mapTLERow(row!);
+    },
+
+    async updateEquipment({ equipmentId, name, variant, specs, isActive }) {
+      const [row] = await database
+        .update(trainingLocationEquipment)
+        .set({
+          name:
+            name === undefined ? sql`${trainingLocationEquipment.name}` : name,
+          variant:
+            variant === undefined
+              ? sql`${trainingLocationEquipment.variant}`
+              : (variant as any),
+          specs:
+            specs === undefined
+              ? sql`${trainingLocationEquipment.specs}`
+              : (specs as any),
+          isActive:
+            isActive === undefined
+              ? sql`${trainingLocationEquipment.isActive}`
+              : !!isActive,
+        })
+        .where(eq(trainingLocationEquipment.id, equipmentId))
+        .returning();
+      return mapTLERow(row!);
+    },
+
+    async removeEquipment({ equipmentId }) {
+      await database
+        .delete(trainingLocationEquipment)
+        .where(eq(trainingLocationEquipment.id, equipmentId));
+    },
+  };
 }
 
-export async function updateLocationEquipmentById(
-  tleId: string,
-  patch: Partial<TleRow>
-) {
-  const [row] = await db
-    .update(trainingLocationEquipment)
-    .set(patch as any)
-    .where(eq(trainingLocationEquipment.id, tleId))
-    .returning();
-  return row ?? null;
+function mapLocationRow(
+  r: typeof TrainingLocationTbl.$inferSelect
+): TTrainingLocationRow {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    name: r.name,
+    type: r.type ?? null,
+    address: r.address ?? null,
+    isActive: !!r.isActive,
+    createdAt: String(r.createdAt),
+    updatedAt: String(r.updatedAt),
+  };
 }
 
-export async function deleteLocationEquipmentById(tleId: string) {
-  await db
-    .delete(trainingLocationEquipment)
-    .where(eq(trainingLocationEquipment.id, tleId));
+function mapTLERow(
+  r: typeof TLETbl.$inferSelect
+): TTrainingLocationEquipmentRow {
+  return {
+    id: r.id,
+    trainingLocationId: r.trainingLocationId,
+    name: r.name,
+    variant: r.variant ?? null,
+    specs: (r as any).specs ?? null,
+    isActive: !!r.isActive,
+  };
 }
+
+export const trainingLocationsRepository = makeTrainingLocationsRepository();

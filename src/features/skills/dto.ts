@@ -1,14 +1,58 @@
-import { z } from "zod";
+// features/skills/dto.ts
 
-export const CreateSkillDto = z.object({
-  sessionBlockId: z.string().uuid().nullable().optional(),
-  exerciseId: z.string().uuid().nullable().optional(),
-  attempts: z.coerce.number().int().min(0).nullable().optional(),
-  successes: z.coerce.number().int().min(0).nullable().optional(),
-  qualityScore: z.union([z.string(), z.number()]).nullable().optional(), // numeric in DB
-  notes: z.string().trim().nullable().optional(),
-});
-export type CreateSkillDto = z.infer<typeof CreateSkillDto>;
+export type TSkillLogRow = {
+  id: string;
+  orgId: string;
+  athleteId: string;
+  sessionId: string;
+  sessionBlockId: string | null;
+  exerciseId: string | null;
+  attempts: number | null;
+  successes: number | null;
+  qualityScore: number | null;
+  notes: string | null;
+};
 
-export const UpdateSkillDto = CreateSkillDto.partial();
-export type UpdateSkillDto = z.infer<typeof UpdateSkillDto>;
+export type TListSkillsInput = {
+  orgId: string;
+  athleteId: string;
+  sessionId: string;
+  // Optional filters
+  exerciseId?: string;
+  minQualityScore?: number;
+  maxQualityScore?: number;
+};
+
+export type TCreateSkillInput = {
+  orgId: string;
+  athleteId: string;
+  sessionId: string;
+  sessionBlockId?: string | null;
+  exerciseId?: string | null;
+  attempts?: number | null;
+  successes?: number | null;
+  qualityScore?: number | null;
+  notes?: string | null;
+};
+
+export type TPatchSkillInput = {
+  orgId: string;
+  athleteId: string;
+  sessionId: string;
+  skillLogId: string;
+  sessionBlockId?: string | null;
+  exerciseId?: string | null;
+  attempts?: number | null;
+  successes?: number | null;
+  qualityScore?: number | null;
+  notes?: string | null;
+};
+
+export type TGetSkillInput = {
+  orgId: string;
+  athleteId: string;
+  sessionId: string;
+  skillLogId: string;
+};
+
+export type TDeleteSkillInput = TGetSkillInput;

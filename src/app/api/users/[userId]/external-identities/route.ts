@@ -14,8 +14,24 @@ const CreateBody = z.object({
 export const GET = withApiAuth(
   async (req: AuthedRequest, ctx: { params: { userId: string } }) => {
     const { userId } = Params.parse(ctx.params);
-    const items = await usersService.listExternalIdentities({ userId });
-    return json.ok({ items }, 200);
+
+    const { searchParams } = new URL(req.url);
+    const provider = searchParams.get("provider") || undefined;
+    const limit = searchParams.get("limit")
+      ? Number(searchParams.get("limit"))
+      : undefined;
+    const cursorParam = searchParams.get("cursor");
+    const cursor = cursorParam === null ? null : cursorParam; // allow null
+
+    const page = await usersService.listExternalIdentities({
+      userId,
+      provider,
+      limit,
+      cursor,
+    });
+
+    // Must be: { items, nextCursor }
+    return json.ok(page, 200);
   },
   { scope: "org", minRole: "org:viewer" }
 );
@@ -25,10 +41,12 @@ export const POST = withApiAuth(
     const { userId } = Params.parse(ctx.params);
     const body = await req.json().catch(() => ({}));
     const input = CreateBody.parse(body);
+
     const created = await usersService.createExternalIdentity({
       userId,
       ...input,
     });
+
     return json.ok(created, 201);
   },
   { scope: "org", minRole: "org:admin" }

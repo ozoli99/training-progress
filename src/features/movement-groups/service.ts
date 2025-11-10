@@ -1,106 +1,82 @@
 import { AppError } from "@/shared/errors";
+import type {
+  TMovementGroupRow,
+  TListMovementGroupsInput,
+  TGetMovementGroupInput,
+  TCreateMovementGroupInput,
+  TPatchMovementGroupInput,
+  TDeleteMovementGroupInput,
+} from "./dto";
 import {
-  insertMovementGroup,
-  getMovementGroupById,
-  getMovementGroupByOrgAndName,
-  updateMovementGroupById,
-  deleteMovementGroupById,
-  listMovementGroups as repoListMovementGroups,
-  listExercisesInMovementGroup,
+  makeMovementGroupsRepository,
+  movementGroupsRepository as defaultRepo,
 } from "./repository";
-import type { CreateMovementGroupInput, UpdateMovementGroupInput } from "./dto";
 
-function toResponse(
-  row: NonNullable<Awaited<ReturnType<typeof getMovementGroupById>>>
-) {
+export interface MovementGroupsService {
+  list(input: TListMovementGroupsInput): Promise<TMovementGroupRow[]>;
+  getById(input: TGetMovementGroupInput): Promise<TMovementGroupRow | null>;
+  create(input: TCreateMovementGroupInput): Promise<TMovementGroupRow>;
+  update(input: TPatchMovementGroupInput): Promise<TMovementGroupRow>;
+  delete(input: TDeleteMovementGroupInput): Promise<void>;
+}
+
+export function makeMovementGroupsService(
+  repo: ReturnType<typeof makeMovementGroupsRepository> = defaultRepo
+): MovementGroupsService {
   return {
-    id: row.id,
-    orgId: row.orgId,
-    name: row.name,
-    description: row.description ?? null,
-    isActive: row.isActive,
+    async list(input) {
+      if (!input.orgId) throw new AppError.BadRequest("orgId is required");
+      return repo.list({
+        ...input,
+        limit: input.limit ?? 50,
+        offset: input.offset ?? 0,
+        orderBy: input.orderBy ?? "name",
+        order: input.order ?? "asc",
+      });
+    },
+
+    async getById(input) {
+      if (!input.orgId || !input.movementGroupId)
+        throw new AppError.BadRequest("orgId and movementGroupId are required");
+      return repo.getById(input);
+    },
+
+    async create(input) {
+      if (!input.orgId) throw new AppError.BadRequest("orgId is required");
+      if (!input.name?.trim())
+        throw new AppError.BadRequest("name is required");
+
+      return repo.create({
+        orgId: input.orgId,
+        name: input.name.trim(),
+        description: input.description ?? null,
+        isActive: input.isActive ?? true,
+      });
+    },
+
+    async update(input) {
+      if (!input.orgId || !input.movementGroupId) {
+        throw new AppError.BadRequest("orgId and movementGroupId are required");
+      }
+      if (input.name !== undefined && !input.name.trim()) {
+        throw new AppError.BadRequest("name cannot be empty");
+      }
+
+      return repo.update({
+        orgId: input.orgId,
+        movementGroupId: input.movementGroupId,
+        name: input.name?.trim(),
+        description: input.description ?? null,
+        isActive: input.isActive,
+      });
+    },
+
+    async delete(input) {
+      if (!input.orgId || !input.movementGroupId)
+        throw new AppError.BadRequest("orgId and movementGroupId are required");
+      await repo.delete(input);
+    },
   };
 }
 
-export async function createMovementGroupService(
-  orgId: string,
-  input: CreateMovementGroupInput
-) {
-  const clash = await getMovementGroupByOrgAndName(orgId, input.name);
-  if (clash)
-    throw new AppError.Conflict(
-      "Movement group name already exists in this org"
-    );
-
-  const row = await insertMovementGroup({
-    orgId,
-    name: input.name,
-    description: input.description,
-    isActive: input.isActive ?? true,
-  } as any);
-
-  return toResponse(row);
-}
-
-export async function fetchMovementGroupService(movementGroupId: string) {
-  const row = await getMovementGroupById(movementGroupId);
-  if (!row) throw new AppError.NotFound("Movement group not found");
-  return toResponse(row);
-}
-
-export async function listMovementGroupsService(
-  orgId: string,
-  params: {
-    limit: number;
-    offset: number;
-    q?: string;
-    isActive?: boolean;
-  }
-) {
-  const rows = await repoListMovementGroups({ orgId, ...params });
-  return rows.map(toResponse);
-}
-
-export async function patchMovementGroupService(
-  movementGroupId: string,
-  patch: UpdateMovementGroupInput
-) {
-  const existing = await getMovementGroupById(movementGroupId);
-  if (!existing) throw new AppError.NotFound("Movement group not found");
-
-  if (patch.name && patch.name !== existing.name) {
-    const clash = await getMovementGroupByOrgAndName(
-      existing.orgId,
-      patch.name
-    );
-    if (clash)
-      throw new AppError.Conflict(
-        "Movement group name already exists in this org"
-      );
-  }
-
-  const updated = await updateMovementGroupById(movementGroupId, {
-    name: patch.name ?? existing.name,
-    description:
-      patch.description === undefined
-        ? existing.description
-        : patch.description,
-    isActive: patch.isActive ?? existing.isActive,
-  } as any);
-  if (!updated)
-    throw new AppError.NotFound("Movement group not found (after update)");
-
-  return toResponse(updated);
-}
-
-export async function removeMovementGroupService(movementGroupId: string) {
-  const existing = await getMovementGroupById(movementGroupId);
-  if (!existing) throw new AppError.NotFound("Movement group not found");
-  await deleteMovementGroupById(movementGroupId);
-}
-
-export async function listExercisesInMovementGroupService(
-  movementGroupId: string
-) {
-  return listExercisesInMovementGroup(movementGroupId);
-}
+export const movementGroupsService = makeMovementGroupsService();

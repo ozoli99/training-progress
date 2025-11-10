@@ -1,129 +1,77 @@
 import { AppError } from "@/shared/errors";
-import {
-  repoListAthletePrograms,
-  repoGetAthleteProgramById,
-  repoInsertAthleteProgram,
-  repoUpdateAthleteProgramById,
-  repoDeleteAthleteProgramById,
-  repoAthleteExists,
-  repoProgramExists,
-  repoHasAnotherActiveForSameProgram,
-} from "./repository";
-
 import type {
-  ListAthleteProgramsQuery,
-  CreateAthleteProgramDto,
-  UpdateAthleteProgramDto,
+  TAthleteProgramRow,
+  TListAthleteProgramsInput,
+  TGetAthleteProgramInput,
+  TEnrollAthleteProgramInput,
+  TUnenrollAthleteProgramInput,
+  TPatchAthleteProgramInput,
 } from "./dto";
+import { athleteProgramsRepository } from "./repository";
 
-export async function listAthletePrograms(
-  orgId: string,
-  athleteId: string,
-  query: ListAthleteProgramsQuery
-) {
-  const exists = await repoAthleteExists(orgId, athleteId);
-  if (!exists) throw new AppError.NotFound("Athlete not found in org");
-
-  return repoListAthletePrograms({
-    orgId,
-    athleteId,
-    limit: query.limit,
-    offset: query.offset,
-    isActive: query.isActive,
-    programId: query.programId,
-    order: query.order,
-  });
-}
-
-export async function getAthleteProgram(
-  orgId: string,
-  athleteId: string,
-  id: string
-) {
-  const row = await repoGetAthleteProgramById(id);
-  if (!row || row.orgId !== orgId || row.athleteId !== athleteId) {
-    throw new AppError.NotFound("Athlete program not found");
+function requireYyyyMmDd(val: string | undefined, msg: string) {
+  if (!val) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    throw new AppError.Validation(msg);
   }
-  return row;
 }
 
-export async function createAthleteProgram(
-  orgId: string,
-  athleteId: string,
-  dto: CreateAthleteProgramDto
-) {
-  const [athExists, progExists] = await Promise.all([
-    repoAthleteExists(orgId, athleteId),
-    repoProgramExists(orgId, dto.programId),
-  ]);
-  if (!athExists) throw new AppError.NotFound("Athlete not found in org");
-  if (!progExists) throw new AppError.Validation("Invalid programId for org");
+function requireNonNegativeInt(
+  n: number | undefined,
+  msg: string
+): asserts n is number {
+  if (n == null) return;
+  if (!Number.isInteger(n) || n < 0) throw new AppError.Validation(msg);
+}
 
-  if (dto.isActive) {
-    const conflict = await repoHasAnotherActiveForSameProgram({
-      orgId,
-      athleteId,
-      programId: dto.programId,
-    });
-    if (conflict) {
-      throw new AppError.Conflict(
-        "Another active assignment exists for this athlete & program"
+export interface AthleteProgramsService {
+  list(input: TListAthleteProgramsInput): Promise<TAthleteProgramRow[]>;
+  getById(input: TGetAthleteProgramInput): Promise<TAthleteProgramRow>;
+  enroll(input: TEnrollAthleteProgramInput): Promise<TAthleteProgramRow>;
+  unenroll(input: TUnenrollAthleteProgramInput): Promise<void>;
+  patch(input: TPatchAthleteProgramInput): Promise<TAthleteProgramRow>;
+}
+
+export function makeAthleteProgramsService(): AthleteProgramsService {
+  return {
+    async list(input) {
+      const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+      const offset = Math.max(input.offset ?? 0, 0);
+      return athleteProgramsRepository.list({
+        ...input,
+        limit,
+        offset,
+        orderBy: input.orderBy ?? "startDate",
+        order: input.order ?? "desc",
+      });
+    },
+
+    async getById(input) {
+      const row = await athleteProgramsRepository.getById(input);
+      if (!row) throw new AppError.NotFound("Athlete program not found");
+      return row;
+    },
+
+    async enroll(input) {
+      requireYyyyMmDd(input.startDate, "startDate must be YYYY-MM-DD");
+      return athleteProgramsRepository.enroll(input);
+    },
+
+    async unenroll(input) {
+      await athleteProgramsRepository.unenroll(input);
+    },
+
+    async patch(input) {
+      requireYyyyMmDd(input.startDate, "startDate must be YYYY-MM-DD");
+      requireNonNegativeInt(
+        input.currentWeek,
+        "currentWeek must be a non-negative integer"
       );
-    }
-  }
-
-  return repoInsertAthleteProgram({
-    orgId,
-    athleteId,
-    programId: dto.programId,
-    startDate: dto.startDate,
-    currentWeek: dto.currentWeek,
-    isActive: dto.isActive,
-  });
+      const row = await athleteProgramsRepository.patch(input);
+      if (!row) throw new AppError.NotFound("Athlete program not found");
+      return row;
+    },
+  };
 }
 
-export async function updateAthleteProgram(
-  orgId: string,
-  athleteId: string,
-  id: string,
-  dto: UpdateAthleteProgramDto
-) {
-  const current = await repoGetAthleteProgramById(id);
-  if (!current || current.orgId !== orgId || current.athleteId !== athleteId) {
-    throw new AppError.NotFound("Athlete program not found");
-  }
-
-  if (dto.isActive === true) {
-    const conflict = await repoHasAnotherActiveForSameProgram({
-      orgId,
-      athleteId,
-      programId: current.programId,
-      excludeId: current.id,
-    });
-    if (conflict) {
-      throw new AppError.Conflict(
-        "Another active assignment exists for this athlete & program"
-      );
-    }
-  }
-
-  const updated = await repoUpdateAthleteProgramById(id, {
-    startDate: dto.startDate,
-    currentWeek: dto.currentWeek,
-    isActive: dto.isActive,
-  });
-
-  return updated!;
-}
-
-export async function deleteAthleteProgram(
-  orgId: string,
-  athleteId: string,
-  id: string
-) {
-  const current = await repoGetAthleteProgramById(id);
-  if (!current || current.orgId !== orgId || current.athleteId !== athleteId) {
-    throw new AppError.NotFound("Athlete program not found");
-  }
-  await repoDeleteAthleteProgramById(id);
-}
+export const athleteProgramsService = makeAthleteProgramsService();

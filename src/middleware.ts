@@ -4,6 +4,7 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/onboarding(.*)",
   "/api/public(.*)",
 ]);
 
@@ -11,16 +12,14 @@ export default clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return;
 
   const { userId, orgId, redirectToSignIn } = await auth();
+  const { pathname, href } = req.nextUrl;
+
   if (!userId) {
-    return redirectToSignIn({ returnBackUrl: req.url });
+    return redirectToSignIn({ returnBackUrl: href });
   }
 
-  const needsOrg = /^\/org\/.+/.test(new URL(req.url).pathname);
-  if (needsOrg && !orgId) {
-    return new Response(null, {
-      status: 307,
-      headers: { Location: "/(app)/org" },
-    });
+  if (pathname.startsWith("/org/") && !orgId) {
+    return Response.redirect(new URL("/onboarding", req.nextUrl), 307);
   }
 });
 

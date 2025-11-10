@@ -1,70 +1,113 @@
-import { repoGetSessionById } from "@/features/sessions/repository";
+// features/skills/service.ts
+
+import { AppError } from "@/shared/errors";
+import type {
+  TCreateSkillInput,
+  TDeleteSkillInput,
+  TGetSkillInput,
+  TListSkillsInput,
+  TPatchSkillInput,
+  TSkillLogRow,
+} from "./dto";
 import {
-  repoDeleteSkill,
-  repoGetSkillById,
-  repoInsertSkill,
-  repoListSkillsByBlock,
-  repoUpdateSkill,
+  makeSkillsRepository,
+  skillsRepository as defaultRepo,
 } from "./repository";
 
-export async function listSkillsService(
-  sessionId: string,
-  sessionBlockId?: string | null
-) {
-  return repoListSkillsByBlock(sessionId, sessionBlockId ?? null);
+export interface SkillsService {
+  list(input: TListSkillsInput): Promise<TSkillLogRow[]>;
+  getById(input: TGetSkillInput): Promise<TSkillLogRow | null>;
+  create(input: TCreateSkillInput): Promise<TSkillLogRow>;
+  update(input: TPatchSkillInput): Promise<TSkillLogRow>;
+  delete(input: TDeleteSkillInput): Promise<void>;
 }
 
-export async function createSkillService(
-  ctx: { orgId: string; athleteId: string },
-  sessionId: string,
-  input: {
-    sessionBlockId?: string | null;
-    exerciseId?: string | null;
-    attempts?: number | null;
-    successes?: number | null;
-    qualityScore?: string | number | null;
-    notes?: string | null;
-  }
-) {
-  const s = await repoGetSessionById(sessionId);
-  if (!s) throw new Error("Session not found");
-  if (s.orgId !== ctx.orgId || s.athleteId !== ctx.athleteId)
-    throw new Error("Forbidden");
-  return repoInsertSkill({ sessionId, ...input });
+export function makeSkillsService(
+  repo: ReturnType<typeof makeSkillsRepository> = defaultRepo
+): SkillsService {
+  return {
+    async list(input) {
+      if (!input.orgId) throw new AppError.BadRequest("orgId is required");
+      if (!input.athleteId)
+        throw new AppError.BadRequest("athleteId is required");
+      if (!input.sessionId)
+        throw new AppError.BadRequest("sessionId is required");
+      return repo.list(input);
+    },
+
+    async getById(input) {
+      if (
+        !input.orgId ||
+        !input.athleteId ||
+        !input.sessionId ||
+        !input.skillLogId
+      ) {
+        throw new AppError.BadRequest(
+          "orgId, athleteId, sessionId and skillLogId are required"
+        );
+      }
+      return repo.getById(input);
+    },
+
+    async create(input) {
+      if (!input.orgId) throw new AppError.BadRequest("orgId is required");
+      if (!input.athleteId)
+        throw new AppError.BadRequest("athleteId is required");
+      if (!input.sessionId)
+        throw new AppError.BadRequest("sessionId is required");
+
+      // light validation
+      if (input.attempts != null && input.attempts < 0) {
+        throw new AppError.BadRequest("attempts cannot be negative");
+      }
+      if (input.successes != null && input.successes < 0) {
+        throw new AppError.BadRequest("successes cannot be negative");
+      }
+      if (input.qualityScore != null && input.qualityScore < 0) {
+        throw new AppError.BadRequest("qualityScore cannot be negative");
+      }
+
+      return repo.create(input);
+    },
+
+    async update(input) {
+      if (
+        !input.orgId ||
+        !input.athleteId ||
+        !input.sessionId ||
+        !input.skillLogId
+      ) {
+        throw new AppError.BadRequest(
+          "orgId, athleteId, sessionId and skillLogId are required"
+        );
+      }
+      if (input.attempts != null && input.attempts < 0) {
+        throw new AppError.BadRequest("attempts cannot be negative");
+      }
+      if (input.successes != null && input.successes < 0) {
+        throw new AppError.BadRequest("successes cannot be negative");
+      }
+      if (input.qualityScore != null && input.qualityScore < 0) {
+        throw new AppError.BadRequest("qualityScore cannot be negative");
+      }
+
+      return repo.update(input);
+    },
+
+    async delete(input) {
+      if (
+        !input.orgId ||
+        !input.athleteId ||
+        !input.sessionId ||
+        !input.skillLogId
+      ) {
+        throw new AppError.BadRequest(
+          "orgId, athleteId, sessionId and skillLogId are required"
+        );
+      }
+      await repo.delete(input);
+    },
+  };
 }
 
-export async function updateSkillService(
-  ctx: { orgId: string; athleteId: string },
-  skillId: string,
-  patch: {
-    sessionBlockId?: string | null;
-    exerciseId?: string | null;
-    attempts?: number | null;
-    successes?: number | null;
-    qualityScore?: string | number | null;
-    notes?: string | null;
-  }
-) {
-  const current = await repoGetSkillById(skillId);
-  if (!current) throw new Error("Skill log not found");
-  const s = await repoGetSessionById(current.sessionId);
-  if (!s) throw new Error("Session not found");
-  if (s.orgId !== ctx.orgId || s.athleteId !== ctx.athleteId)
-    throw new Error("Forbidden");
-  const updated = await repoUpdateSkill(skillId, patch);
-  if (!updated) throw new Error("Update failed");
-  return updated;
-}
-
-export async function deleteSkillService(
-  ctx: { orgId: string; athleteId: string },
-  skillId: string
-) {
-  const current = await repoGetSkillById(skillId);
-  if (!current) throw new Error("Skill log not found");
-  const s = await repoGetSessionById(current.sessionId);
-  if (!s) throw new Error("Session not found");
-  if (s.orgId !== ctx.orgId || s.athleteId !== ctx.athleteId)
-    throw new Error("Forbidden");
-  await repoDeleteSkill(skillId);
-}
+export const skillsService = makeSkillsService();

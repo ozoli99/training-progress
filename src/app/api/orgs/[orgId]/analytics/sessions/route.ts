@@ -1,23 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { withApiAuth } from "@/features/auth/guard";
-import { parseDateRange } from "@/lib/api";
+import { parseDateRange, parsePagination } from "@/lib/api";
 import { analyticsService } from "@/features/analytics/service";
-
-function parsePagination(url: string) {
-  const sp = new URL(url).searchParams;
-  return {
-    limit: Number(sp.get("limit") ?? 50),
-    offset: Number(sp.get("offset") ?? 0),
-  };
-}
+import { orgsService } from "@/features/orgs/service";
 
 export const GET = withApiAuth(
-  async (req: NextRequest, { params }: { params: { orgId: string } }) => {
-    const range = parseDateRange(req.url);
-    const { limit, offset } = parsePagination(req.url);
+  async (
+    req: NextRequest | Request,
+    { params }: { params: { orgId: string } }
+  ) => {
+    // Resolve UUID from either UUID or Clerk org id in the URL
+    const orgRow = await orgsService.resolveOrgByAnyId({
+      orgIdOrClerkId: params.orgId,
+    });
+    if (!orgRow) {
+      return NextResponse.json({ error: "Org not found" }, { status: 404 });
+    }
+
+    const range = parseDateRange(req);
+    const { limit, offset } = parsePagination(req, {
+      maxLimit: 100,
+      defLimit: 50,
+    });
 
     const data = await analyticsService.getSessions({
-      orgId: params.orgId,
+      orgId: orgRow.id, // <-- use UUID
       range,
       limit,
       offset,

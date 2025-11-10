@@ -1,83 +1,55 @@
-import {
-  repoGetPlannedSessionById,
-  repoInsertPlannedSession,
-  repoListPlannedSessions,
-  repoUpdatePlannedSessionById,
-  repoDeletePlannedSessionById,
-} from "./repository";
-import { repoAthleteExists } from "@/features/athlete-programs/repository"; // already implemented in your AP repo
+import { AppError } from "@/shared/errors";
+import type {
+  TPlannedSessionRow,
+  TListPlannedSessionsInput,
+  TGetPlannedSessionInput,
+  TCreatePlannedSessionInput,
+  TPatchPlannedSessionInput,
+  TDeletePlannedSessionInput,
+} from "./dto";
+import { plannedSessionsRepository } from "./repository";
 
-export async function listPlannedSessionsService(args: {
-  orgId: string;
-  athleteId: string;
-  limit: number;
-  offset: number;
-  from?: string;
-  to?: string;
-  order: "asc" | "desc";
-  title?: string;
-}) {
-  return repoListPlannedSessions(args);
+function requireNonEmpty(val: string | undefined | null, msg: string) {
+  if (!val || !`${val}`.trim()) throw new AppError.Validation(msg);
 }
 
-export async function createPlannedSessionService(params: {
-  orgId: string;
-  athleteId: string;
-  plannedDate: string; // YYYY-MM-DD
-  title?: string;
-  notes?: string;
-}) {
-  const exists = await repoAthleteExists(params.orgId, params.athleteId);
-  if (!exists) throw new Error("Athlete not found in org");
-
-  return repoInsertPlannedSession({
-    orgId: params.orgId,
-    athleteId: params.athleteId,
-    plannedDate: params.plannedDate,
-    title: params.title,
-    notes: params.notes,
-  });
+export interface PlannedSessionsService {
+  list(i: TListPlannedSessionsInput): Promise<TPlannedSessionRow[]>;
+  get(i: TGetPlannedSessionInput): Promise<TPlannedSessionRow>;
+  create(i: TCreatePlannedSessionInput): Promise<TPlannedSessionRow>;
+  patch(i: TPatchPlannedSessionInput): Promise<TPlannedSessionRow>;
+  del(i: TDeletePlannedSessionInput): Promise<void>;
 }
 
-export async function getPlannedSessionService(id: string) {
-  const row = await repoGetPlannedSessionById(id);
-  if (!row) throw new Error("Planned session not found");
-  return row;
+export function makePlannedSessionsService(): PlannedSessionsService {
+  return {
+    async list(i) {
+      return plannedSessionsRepository.list(i);
+    },
+
+    async get(i) {
+      const row = await plannedSessionsRepository.get(i);
+      if (!row) throw new AppError.NotFound("Planned session not found");
+      return row;
+    },
+
+    async create(i) {
+      requireNonEmpty(i.orgId, "orgId required");
+      requireNonEmpty(i.athleteId, "athleteId required");
+      requireNonEmpty(i.plannedDate, "plannedDate required");
+      return plannedSessionsRepository.create(i);
+    },
+
+    async patch(i) {
+      const row = await plannedSessionsRepository.patch(i);
+      if (!row) throw new AppError.NotFound("Planned session not found");
+      return row;
+    },
+
+    async del(i) {
+      await plannedSessionsRepository.del(i);
+    },
+  };
 }
 
-export async function updatePlannedSessionService(
-  id: string,
-  context: { orgId: string; athleteId: string },
-  patch: { plannedDate?: string; title?: string; notes?: string }
-) {
-  const current = await repoGetPlannedSessionById(id);
-  if (!current) throw new Error("Planned session not found");
-  if (
-    current.orgId !== context.orgId ||
-    current.athleteId !== context.athleteId
-  ) {
-    throw new Error("Forbidden");
-  }
-  const row = await repoUpdatePlannedSessionById(id, {
-    plannedDate: patch.plannedDate,
-    title: patch.title ?? null,
-    notes: patch.notes ?? null,
-  });
-  if (!row) throw new Error("Update failed");
-  return row;
-}
-
-export async function deletePlannedSessionService(
-  id: string,
-  context: { orgId: string; athleteId: string }
-) {
-  const current = await repoGetPlannedSessionById(id);
-  if (!current) throw new Error("Planned session not found");
-  if (
-    current.orgId !== context.orgId ||
-    current.athleteId !== context.athleteId
-  ) {
-    throw new Error("Forbidden");
-  }
-  await repoDeletePlannedSessionById(id);
-}
+export const plannedSessionsService = makePlannedSessionsService();

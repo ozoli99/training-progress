@@ -43,6 +43,8 @@ export interface OrgsRepository {
   getOrgWithSettings(orgId: string): Promise<TOrgWithSettings | null>;
   getMembers(orgId: string): Promise<TOrgMemberRow[]>;
 
+  findByClerkOrgId(clerkOrgId: string): Promise<TOrgRow | null>;
+
   setOrgSettings(input: {
     orgId: string;
     units?: "metric" | "imperial";
@@ -260,6 +262,15 @@ export function makeOrgsRepository(database = defaultDatabase): OrgsRepository {
         fullName: r.fullName ?? null,
         avatarUrl: r.avatarUrl ?? null,
       }));
+    },
+
+    async findByClerkOrgId(clerkOrgId) {
+      const [row] = await database
+        .select()
+        .from(org)
+        .where(eq(org.clerkOrgId, clerkOrgId))
+        .limit(1);
+      return row ? mapOrgRow(row) : null;
     },
 
     async setOrgSettings({

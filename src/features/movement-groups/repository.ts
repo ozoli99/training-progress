@@ -1,90 +1,127 @@
 import { db } from "@/infrastructure/db/client";
-import {
-  movementGroup,
-  exerciseMovementGroup,
-  exercise,
-} from "@/infrastructure/db/schema";
-import { and, eq, like } from "drizzle-orm";
-import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
+import * as s from "@/infrastructure/db/schema";
+import { and, eq, ilike, sql } from "drizzle-orm";
+import type {
+  TMovementGroupRow,
+  TListMovementGroupsInput,
+  TGetMovementGroupInput,
+  TCreateMovementGroupInput,
+  TPatchMovementGroupInput,
+  TDeleteMovementGroupInput,
+} from "./dto";
 
-export type MovementGroupRow = InferSelectModel<typeof movementGroup>;
-export type NewMovementGroupRow = InferInsertModel<typeof movementGroup>;
-
-export async function insertMovementGroup(values: NewMovementGroupRow) {
-  const [row] = await db.insert(movementGroup).values(values).returning();
-  return row!;
+function mapRow(r: typeof s.movementGroup.$inferSelect): TMovementGroupRow {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    name: r.name,
+    description: r.description ?? null,
+    isActive: r.isActive,
+  };
 }
 
-export async function getMovementGroupById(id: string) {
-  const rows = await db
-    .select()
-    .from(movementGroup)
-    .where(eq(movementGroup.id, id))
-    .limit(1);
-  return rows[0] ?? null;
+export interface MovementGroupsRepository {
+  list(input: TListMovementGroupsInput): Promise<TMovementGroupRow[]>;
+  getById(input: TGetMovementGroupInput): Promise<TMovementGroupRow | null>;
+  create(input: TCreateMovementGroupInput): Promise<TMovementGroupRow>;
+  update(input: TPatchMovementGroupInput): Promise<TMovementGroupRow>;
+  delete(input: TDeleteMovementGroupInput): Promise<void>;
 }
 
-export async function getMovementGroupByOrgAndName(
-  orgId: string,
-  name: string
-) {
-  const rows = await db
-    .select()
-    .from(movementGroup)
-    .where(and(eq(movementGroup.orgId, orgId), eq(movementGroup.name, name)))
-    .limit(1);
-  return rows[0] ?? null;
+export function makeMovementGroupsRepository(): MovementGroupsRepository {
+  return {
+    async list(input) {
+      const where = and(
+        eq(s.movementGroup.orgId, input.orgId),
+        input.q
+          ? ilike(
+              sql`${s.movementGroup.name} || ' ' || coalesce(${s.movementGroup.description}, '')`,
+              `%${input.q}%`
+            )
+          : undefined,
+        input.isActive === undefined
+          ? undefined
+          : eq(s.movementGroup.isActive, input.isActive)
+      );
+
+      const orderCol =
+        input.orderBy === "id" ? s.movementGroup.id : s.movementGroup.name;
+      const orderDir =
+        (input.order ?? "asc").toLowerCase() === "desc" ? "desc" : "asc";
+
+      const rows = await db
+        .select()
+        .from(s.movementGroup)
+        .where(where)
+        .orderBy(
+          orderDir === "desc" ? sql`${orderCol} DESC` : sql`${orderCol} ASC`
+        )
+        .limit(input.limit ?? 50)
+        .offset(input.offset ?? 0);
+
+      return rows.map(mapRow);
+    },
+
+    async getById({ orgId, movementGroupId }) {
+      const rows = await db
+        .select()
+        .from(s.movementGroup)
+        .where(
+          and(
+            eq(s.movementGroup.id, movementGroupId),
+            eq(s.movementGroup.orgId, orgId)
+          )
+        )
+        .limit(1);
+      if (!rows.length) return null;
+      return mapRow(rows[0]);
+    },
+
+    async create(input) {
+      const [row] = await db
+        .insert(s.movementGroup)
+        .values({
+          orgId: input.orgId,
+          name: input.name,
+          description: input.description ?? null,
+          isActive: input.isActive ?? true,
+        })
+        .returning();
+      return mapRow(row);
+    },
+
+    async update(input) {
+      const patch: Partial<typeof s.movementGroup.$inferInsert> = {};
+      if ("name" in input && input.name !== undefined) patch.name = input.name;
+      if ("description" in input) patch.description = input.description ?? null;
+      if ("isActive" in input && input.isActive !== undefined)
+        patch.isActive = input.isActive;
+
+      const [row] = await db
+        .update(s.movementGroup)
+        .set(patch)
+        .where(
+          and(
+            eq(s.movementGroup.id, input.movementGroupId),
+            eq(s.movementGroup.orgId, input.orgId)
+          )
+        )
+        .returning();
+
+      return mapRow(row);
+    },
+
+    async delete({ orgId, movementGroupId }) {
+      await db
+        .delete(s.movementGroup)
+        .where(
+          and(
+            eq(s.movementGroup.id, movementGroupId),
+            eq(s.movementGroup.orgId, orgId)
+          )
+        );
+    },
+  };
 }
 
-export async function updateMovementGroupById(
-  id: string,
-  patch: Partial<MovementGroupRow>
-) {
-  const [row] = await db
-    .update(movementGroup)
-    .set(patch as any)
-    .where(eq(movementGroup.id, id))
-    .returning();
-  return row ?? null;
-}
-
-export async function deleteMovementGroupById(id: string) {
-  await db.delete(movementGroup).where(eq(movementGroup.id, id));
-}
-
-export async function listMovementGroups(opts: {
-  orgId: string;
-  limit: number;
-  offset: number;
-  q?: string;
-  isActive?: boolean;
-}) {
-  const filters = [
-    eq(movementGroup.orgId, opts.orgId),
-    opts.q ? like(movementGroup.name, `%${opts.q}%`) : undefined,
-    typeof opts.isActive === "boolean"
-      ? eq(movementGroup.isActive, opts.isActive)
-      : undefined,
-  ].filter(Boolean) as any[];
-
-  return db
-    .select()
-    .from(movementGroup)
-    .where(and(...filters))
-    .orderBy(movementGroup.name)
-    .limit(opts.limit)
-    .offset(opts.offset);
-}
-
-export async function listExercisesInMovementGroup(movementGroupId: string) {
-  return db
-    .select({
-      id: exercise.id,
-      name: exercise.name,
-      category: exercise.category,
-      modality: exercise.modality,
-    })
-    .from(exerciseMovementGroup)
-    .innerJoin(exercise, eq(exercise.id, exerciseMovementGroup.exerciseId))
-    .where(eq(exerciseMovementGroup.movementGroupId, movementGroupId));
-}
+export const movementGroupsRepository = makeMovementGroupsRepository();

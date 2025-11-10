@@ -18,7 +18,10 @@ import { relations } from "drizzle-orm";
 const now = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updated = () =>
-  timestamp("updated_at", { withTimezone: true }).defaultNow().notNull();
+  timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull();
 
 export const userAccount = pgTable(
   "user_account",
@@ -466,6 +469,8 @@ export const athleteProfile = pgTable(
     strengthIndex: numeric("strength_index"),
     athleteScore: numeric("athlete_score"),
     lastMetrics: jsonb("last_metrics"),
+    createdAt: now(),
+    updatedAt: updated(),
   },
   (t) => ({
     ux: uniqueIndex("ux_athlete_profile_day").on(

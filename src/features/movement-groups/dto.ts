@@ -1,38 +1,42 @@
-import { z } from "zod";
+export type TMovementGroupRow = {
+  id: string;
+  orgId: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+};
 
-export const OrgParam = z.object({ id: z.string().uuid() });
-export const MovementGroupParam = z.object({
-  id: z.string().uuid(),
-  movementGroupId: z.string().uuid(),
-});
+export type TListMovementGroupsInput = {
+  orgId: string;
+  q?: string;
+  isActive?: boolean;
+  limit?: number;
+  offset?: number;
+  orderBy?: "name" | "id";
+  order?: "asc" | "desc";
+};
 
-export const ListMovementGroupsQuery = z.object({
-  limit: z.coerce.number().min(1).max(100).default(20),
-  offset: z.coerce.number().min(0).default(0),
-  q: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
-});
-export type ListMovementGroupsQueryT = z.infer<typeof ListMovementGroupsQuery>;
+export type TGetMovementGroupInput = {
+  orgId: string;
+  movementGroupId: string;
+};
 
-export const CreateMovementGroupDto = z.object({
-  name: z.string().min(1).max(120),
-  description: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
-export type CreateMovementGroupInput = z.infer<typeof CreateMovementGroupDto>;
+export type TCreateMovementGroupInput = {
+  orgId: string;
+  name: string;
+  description?: string | null;
+  isActive?: boolean;
+};
 
-export const UpdateMovementGroupDto = z.object({
-  name: z.string().min(1).max(120).optional(),
-  description: z.string().optional().nullable(),
-  isActive: z.boolean().optional(),
-});
-export type UpdateMovementGroupInput = z.infer<typeof UpdateMovementGroupDto>;
+export type TPatchMovementGroupInput = {
+  orgId: string;
+  movementGroupId: string;
+  name?: string;
+  description?: string | null;
+  isActive?: boolean;
+};
 
-export const MovementGroupResponse = z.object({
-  id: z.string().uuid(),
-  orgId: z.string().uuid(),
-  name: z.string(),
-  description: z.string().nullable(),
-  isActive: z.boolean(),
-});
-export type MovementGroupResponseT = z.infer<typeof MovementGroupResponse>;
+export type TDeleteMovementGroupInput = {
+  orgId: string;
+  movementGroupId: string;
+};

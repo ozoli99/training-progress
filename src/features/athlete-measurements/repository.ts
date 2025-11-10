@@ -1,127 +1,211 @@
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
-import { db } from "@/infrastructure/db/client";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
 import {
   athleteMeasurement,
-  measurementType,
+  type athleteMeasurement as AthleteMeasurementTbl,
 } from "@/infrastructure/db/schema";
+import type { TAthleteMeasurementRow } from "./dto";
 
-type ListArgs = {
-  orgId: string;
-  athleteId: string;
-  limit: number;
-  offset: number;
-  type?: string;
-  fromIso?: string;
-  toIso?: string;
-  order: "asc" | "desc";
-};
+const toNumericDB = (n: number | null | undefined) =>
+  n === undefined ? undefined : n === null ? null : String(n);
 
-export async function repoListMeasurements(args: ListArgs) {
-  const { orgId, athleteId, limit, offset, type, fromIso, toIso, order } = args;
+const toDate = (iso?: string) =>
+  iso === undefined ? undefined : new Date(iso);
 
-  const where = and(
-    eq(athleteMeasurement.orgId, orgId),
-    eq(athleteMeasurement.athleteId, athleteId),
-    type ? eq(athleteMeasurement.type, type) : undefined,
-    fromIso ? gte(athleteMeasurement.measuredAt, new Date(fromIso)) : undefined,
-    toIso ? lte(athleteMeasurement.measuredAt, new Date(toIso)) : undefined
-  );
-
-  const rows = await db
-    .select()
-    .from(athleteMeasurement)
-    .where(where)
-    .orderBy(
-      order === "asc"
-        ? asc(athleteMeasurement.measuredAt)
-        : desc(athleteMeasurement.measuredAt)
-    )
-    .limit(limit)
-    .offset(offset);
-
-  return rows;
+function toNumberOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
-export async function repoGetMeasurementById(id: string) {
-  const [row] = await db
-    .select()
-    .from(athleteMeasurement)
-    .where(eq(athleteMeasurement.id, id))
-    .limit(1);
-  return row ?? null;
+function mapRow(
+  r: typeof AthleteMeasurementTbl.$inferSelect
+): TAthleteMeasurementRow {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    athleteId: r.athleteId,
+    measuredAt: r.measuredAt.toISOString?.() ?? String(r.measuredAt),
+    type: r.type,
+    valueNum: toNumberOrNull(r.valueNum),
+    valueJson: (r.valueJson as unknown) ?? null,
+    source: (r.source as string | null) ?? null,
+    notes: (r.notes as string | null) ?? null,
+  };
 }
 
-export async function repoInsertMeasurement(input: {
-  orgId: string;
-  athleteId: string;
-  measuredAt: string; // ISO
-  type: string;
-  valueNum?: number; // incoming as number
-  valueJson?: Record<string, unknown>;
-  source?: string;
-  notes?: string;
-}) {
-  const [row] = await db
-    .insert(athleteMeasurement)
-    .values({
-      orgId: input.orgId,
-      athleteId: input.athleteId,
-      measuredAt: new Date(input.measuredAt),
-      type: input.type,
-      // numeric() -> string | null in TS
-      valueNum:
-        input.valueNum !== undefined && input.valueNum !== null
-          ? String(input.valueNum)
-          : null,
-      valueJson: input.valueJson ?? null,
-      source: input.source ?? null,
-      notes: input.notes ?? null,
-    })
-    .returning();
-  return row!;
-}
+export interface AthleteMeasurementsRepository {
+  list(input: {
+    orgId: string;
+    athleteId: string;
+    from?: string; // ISO datetime
+    to?: string; // ISO datetime
+    types?: string[];
+    limit: number;
+    offset: number;
+    order: "asc" | "desc";
+  }): Promise<TAthleteMeasurementRow[]>;
 
-export async function repoUpdateMeasurementById(
-  id: string,
-  patch: {
-    measuredAt?: string;
-    type?: string;
-    valueNum?: number | null; // incoming as number|null
-    valueJson?: Record<string, unknown> | null;
+  getById(input: {
+    orgId: string;
+    athleteMeasurementId: string;
+  }): Promise<TAthleteMeasurementRow | null>;
+
+  create(input: {
+    orgId: string;
+    athleteId: string;
+    measuredAt: string; // ISO datetime
+    type: string;
+    valueNum?: number | null;
+    valueJson?: unknown | null;
     source?: string | null;
     notes?: string | null;
-  }
-) {
-  const [row] = await db
-    .update(athleteMeasurement)
-    .set({
-      measuredAt: patch.measuredAt ? new Date(patch.measuredAt) : undefined,
-      type: patch.type ?? undefined,
-      valueNum:
-        patch.valueNum === undefined
-          ? undefined
-          : patch.valueNum === null
-            ? null
-            : String(patch.valueNum),
-      valueJson: patch.valueJson === undefined ? undefined : patch.valueJson,
-      source: patch.source === undefined ? undefined : patch.source,
-      notes: patch.notes === undefined ? undefined : patch.notes,
-      updatedAt: new Date(),
-    })
-    .where(eq(athleteMeasurement.id, id))
-    .returning();
-  return row ?? null;
+  }): Promise<TAthleteMeasurementRow>;
+
+  update(input: {
+    orgId: string;
+    athleteMeasurementId: string;
+    measuredAt?: string; // ISO datetime
+    type?: string;
+    valueNum?: number | null;
+    valueJson?: unknown | null;
+    source?: string | null;
+    notes?: string | null;
+  }): Promise<TAthleteMeasurementRow>;
+
+  delete(input: { orgId: string; athleteMeasurementId: string }): Promise<void>;
 }
 
-export async function repoDeleteMeasurementById(id: string) {
-  await db.delete(athleteMeasurement).where(eq(athleteMeasurement.id, id));
+export function makeAthleteMeasurementsRepository(
+  database = defaultDatabase
+): AthleteMeasurementsRepository {
+  return {
+    async list({ orgId, athleteId, from, to, types, limit, offset, order }) {
+      const fromDt = toDate(from);
+      const toDt = toDate(to);
+
+      const filters = [
+        eq(athleteMeasurement.orgId, orgId),
+        eq(athleteMeasurement.athleteId, athleteId),
+        fromDt ? gte(athleteMeasurement.measuredAt, fromDt) : sql`true`,
+        toDt ? lte(athleteMeasurement.measuredAt, toDt) : sql`true`,
+        types && types.length
+          ? inArray(athleteMeasurement.type, types)
+          : sql`true`,
+      ] as const;
+
+      const rows = await database
+        .select()
+        .from(athleteMeasurement)
+        .where(and(...filters))
+        .orderBy(
+          order === "asc"
+            ? asc(athleteMeasurement.measuredAt)
+            : desc(athleteMeasurement.measuredAt)
+        )
+        .limit(limit)
+        .offset(offset);
+
+      return rows.map(mapRow);
+    },
+
+    async getById({ orgId, athleteMeasurementId }) {
+      const [row] = await database
+        .select()
+        .from(athleteMeasurement)
+        .where(
+          and(
+            eq(athleteMeasurement.orgId, orgId),
+            eq(athleteMeasurement.id, athleteMeasurementId)
+          )
+        )
+        .limit(1);
+
+      return row ? mapRow(row) : null;
+    },
+
+    async create({
+      orgId,
+      athleteId,
+      measuredAt,
+      type,
+      valueNum,
+      valueJson,
+      source,
+      notes,
+    }) {
+      const [row] = await database
+        .insert(athleteMeasurement)
+        .values({
+          orgId,
+          athleteId,
+          measuredAt: new Date(measuredAt), // <-- must be Date for timestamptz
+          type,
+          valueNum: toNumericDB(valueNum),
+          valueJson: valueJson ?? null,
+          source: source ?? null,
+          notes: notes ?? null,
+        })
+        .returning();
+
+      return mapRow(row!);
+    },
+
+    async update({
+      orgId,
+      athleteMeasurementId,
+      measuredAt,
+      type,
+      valueNum,
+      valueJson,
+      source,
+      notes,
+    }) {
+      const patch: Record<string, unknown> = {
+        measuredAt:
+          measuredAt === undefined
+            ? sql`${athleteMeasurement.measuredAt}`
+            : new Date(measuredAt), // <-- Date
+        type: type === undefined ? sql`${athleteMeasurement.type}` : type,
+        valueNum:
+          valueNum === undefined
+            ? sql`${athleteMeasurement.valueNum}`
+            : toNumericDB(valueNum),
+        valueJson:
+          valueJson === undefined
+            ? sql`${athleteMeasurement.valueJson}`
+            : (valueJson as unknown),
+        source:
+          source === undefined ? sql`${athleteMeasurement.source}` : source,
+        notes: notes === undefined ? sql`${athleteMeasurement.notes}` : notes,
+      };
+
+      const [row] = await database
+        .update(athleteMeasurement)
+        .set(patch)
+        .where(
+          and(
+            eq(athleteMeasurement.orgId, orgId),
+            eq(athleteMeasurement.id, athleteMeasurementId)
+          )
+        )
+        .returning();
+
+      return mapRow(row!);
+    },
+
+    async delete({ orgId, athleteMeasurementId }) {
+      await database
+        .delete(athleteMeasurement)
+        .where(
+          and(
+            eq(athleteMeasurement.orgId, orgId),
+            eq(athleteMeasurement.id, athleteMeasurementId)
+          )
+        );
+    },
+  };
 }
 
-export async function repoMeasurementTypeExists(code: string) {
-  const [row] = await db
-    .select({ code: measurementType.code })
-    .from(measurementType)
-    .where(eq(measurementType.code, code))
-    .limit(1);
-  return !!row;
-}
+export const athleteMeasurementsRepository =
+  makeAthleteMeasurementsRepository();

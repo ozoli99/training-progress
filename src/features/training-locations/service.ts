@@ -1,165 +1,70 @@
-import { AppError } from "@/shared/errors";
 import {
-  insertLocation,
-  getLocationById,
-  getLocationByOrgName,
-  updateLocationById,
-  deleteLocationById,
-  listLocations as repoListLocations,
-  insertLocationEquipment,
-  getLocationEquipmentById,
-  listLocationEquipment as repoListLocationEquipment,
-  updateLocationEquipmentById,
-  deleteLocationEquipmentById,
-} from "./repository";
-import type {
-  CreateLocationInput,
-  UpdateLocationInput,
-  CreateLocationEquipmentInput,
+  TrainingLocationRow,
+  CreateTrainingLocationInput,
+  UpdateTrainingLocationInput,
+  ListTrainingLocationsInput,
+  GetTrainingLocationInput,
+  TrainingLocationEquipmentRow,
+  ListLocationEquipmentInput,
+  AddLocationEquipmentInput,
   UpdateLocationEquipmentInput,
+  RemoveLocationEquipmentInput,
 } from "./dto";
+import {
+  trainingLocationsRepository,
+  type TrainingLocationsRepository,
+} from "./repository";
 
-const toLocation = (
-  r: NonNullable<Awaited<ReturnType<typeof getLocationById>>>
-) => ({
-  id: r.id,
-  orgId: r.orgId,
-  name: r.name,
-  address: r.address ?? null,
-  type: (r.type as "gym" | "home" | "outdoor" | null) ?? null,
-  isActive: r.isActive,
-});
-
-const toTle = (
-  r: NonNullable<Awaited<ReturnType<typeof getLocationEquipmentById>>>
-) => ({
-  id: r.id,
-  trainingLocationId: r.trainingLocationId,
-  name: r.name,
-  variant: r.variant ?? null,
-  specs: (r.specs as any) ?? null,
-  isActive: r.isActive,
-});
-
-export async function createLocationService(
-  orgId: string,
-  input: CreateLocationInput
+export function makeTrainingLocationsService(
+  repo: TrainingLocationsRepository
 ) {
-  const clash = await getLocationByOrgName(orgId, input.name);
-  if (clash)
-    throw new AppError.Conflict(
-      "A training location with this name already exists in this org"
-    );
+  return {
+    async list(input: unknown) {
+      const data = ListTrainingLocationsInput.parse(input);
+      const rows = await repo.list(data);
+      return rows.map((r) => TrainingLocationRow.parse(r));
+    },
+    async get(input: unknown) {
+      const data = GetTrainingLocationInput.parse(input);
+      const row = await repo.get(data);
+      return row ? TrainingLocationRow.parse(row) : null;
+    },
+    async create(input: unknown) {
+      const data = CreateTrainingLocationInput.parse(input);
+      const row = await repo.create(data);
+      return TrainingLocationRow.parse(row);
+    },
+    async update(input: unknown) {
+      const data = UpdateTrainingLocationInput.parse(input);
+      const row = await repo.update(data);
+      return TrainingLocationRow.parse(row);
+    },
 
-  const row = await insertLocation({
-    orgId,
-    name: input.name,
-    address: input.address,
-    type: (input.type as any) ?? null,
-    isActive: input.isActive ?? true,
-  } as any);
-
-  return toLocation(row);
+    async listEquipment(input: unknown) {
+      const data = ListLocationEquipmentInput.parse(input);
+      const rows = await repo.listEquipment(data);
+      return rows.map((r) => TrainingLocationEquipmentRow.parse(r));
+    },
+    async addEquipment(input: unknown) {
+      const data = AddLocationEquipmentInput.parse(input);
+      const row = await repo.addEquipment(data);
+      return TrainingLocationEquipmentRow.parse(row);
+    },
+    async updateEquipment(input: unknown) {
+      const data = UpdateLocationEquipmentInput.parse(input);
+      const row = await repo.updateEquipment(data);
+      return TrainingLocationEquipmentRow.parse(row);
+    },
+    async removeEquipment(input: unknown) {
+      const data = RemoveLocationEquipmentInput.parse(input);
+      await repo.removeEquipment(data);
+    },
+  };
 }
 
-export async function fetchLocationService(locationId: string) {
-  const row = await getLocationById(locationId);
-  if (!row) throw new AppError.NotFound("Training location not found");
-  return toLocation(row);
-}
-
-export async function listLocationsService(
-  orgId: string,
-  params: { limit: number; offset: number; q?: string; isActive?: boolean }
-) {
-  const rows = await repoListLocations({ orgId, ...params });
-  return rows.map(toLocation);
-}
-
-export async function patchLocationService(
-  locationId: string,
-  patch: UpdateLocationInput
-) {
-  const existing = await getLocationById(locationId);
-  if (!existing) throw new AppError.NotFound("Training location not found");
-
-  const nextName = patch.name ?? existing.name;
-  if (nextName !== existing.name) {
-    const clash = await getLocationByOrgName(existing.orgId, nextName);
-    if (clash)
-      throw new AppError.Conflict(
-        "A training location with this name already exists in this org"
-      );
-  }
-
-  const updated = await updateLocationById(locationId, {
-    name: nextName,
-    address: patch.address === undefined ? existing.address : patch.address,
-    type:
-      patch.type === undefined ? (existing.type as any) : (patch.type as any),
-    isActive: patch.isActive ?? existing.isActive,
-  } as any);
-
-  if (!updated)
-    throw new AppError.NotFound("Training location not found (after update)");
-  return toLocation(updated);
-}
-
-export async function removeLocationService(locationId: string) {
-  const existing = await getLocationById(locationId);
-  if (!existing) throw new AppError.NotFound("Training location not found");
-  await deleteLocationById(locationId);
-}
-
-export async function createLocationEquipmentService(
-  locationId: string,
-  input: CreateLocationEquipmentInput
-) {
-  const row = await insertLocationEquipment({
-    trainingLocationId: locationId,
-    name: input.name,
-    variant: input.variant ?? null,
-    specs: input.specs,
-    isActive: input.isActive ?? true,
-  } as any);
-  return toTle(row);
-}
-
-export async function listLocationEquipmentService(
-  locationId: string,
-  params: { limit: number; offset: number; q?: string; isActive?: boolean }
-) {
-  const rows = await repoListLocationEquipment({ locationId, ...params });
-  return rows.map(toTle);
-}
-
-export async function fetchLocationEquipmentService(tleId: string) {
-  const row = await getLocationEquipmentById(tleId);
-  if (!row) throw new AppError.NotFound("Location equipment not found");
-  return toTle(row);
-}
-
-export async function patchLocationEquipmentService(
-  tleId: string,
-  patch: UpdateLocationEquipmentInput
-) {
-  const existing = await getLocationEquipmentById(tleId);
-  if (!existing) throw new AppError.NotFound("Location equipment not found");
-
-  const updated = await updateLocationEquipmentById(tleId, {
-    name: patch.name ?? existing.name,
-    variant: patch.variant ?? existing.variant,
-    specs: patch.specs === undefined ? existing.specs : patch.specs,
-    isActive: patch.isActive ?? existing.isActive,
-  } as any);
-
-  if (!updated)
-    throw new AppError.NotFound("Location equipment not found (after update)");
-  return toTle(updated);
-}
-
-export async function removeLocationEquipmentService(tleId: string) {
-  const existing = await getLocationEquipmentById(tleId);
-  if (!existing) throw new AppError.NotFound("Location equipment not found");
-  await deleteLocationEquipmentById(tleId);
-}
+export const trainingLocationsService = makeTrainingLocationsService(
+  trainingLocationsRepository
+);
+export type TrainingLocationsService = ReturnType<
+  typeof makeTrainingLocationsService
+>;

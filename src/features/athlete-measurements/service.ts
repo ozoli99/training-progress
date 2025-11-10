@@ -1,102 +1,54 @@
-import { z } from "zod";
-import { AppError } from "@/shared/errors";
-import { parseWith } from "@/lib/validation";
 import {
-  CreateMeasurementDto,
-  ListMeasurementsQuery,
-  UpdateMeasurementDto,
+  AthleteMeasurementRow,
+  ListAthleteMeasurementsInput,
+  GetAthleteMeasurementByIdInput,
+  CreateAthleteMeasurementInput,
+  UpdateAthleteMeasurementInput,
+  DeleteAthleteMeasurementInput,
 } from "./dto";
 import {
-  repoDeleteMeasurementById,
-  repoGetMeasurementById,
-  repoInsertMeasurement,
-  repoListMeasurements,
-  repoMeasurementTypeExists,
-  repoUpdateMeasurementById,
+  athleteMeasurementsRepository,
+  type AthleteMeasurementsRepository,
 } from "./repository";
 
-function must<T>(v: T | null | undefined, msg = "Not found"): T {
-  if (!v) throw new AppError.NotFound(msg);
-  return v;
-}
-
-export async function svcListAthleteMeasurements(
-  athleteId: string,
-  query: unknown
+export function makeAthleteMeasurementsService(
+  repository: AthleteMeasurementsRepository
 ) {
-  const q = parseWith<z.infer<typeof ListMeasurementsQuery>>(
-    ListMeasurementsQuery,
-    query ?? {}
-  );
-  return repoListMeasurements({
-    athleteId,
-    limit: q.limit,
-    offset: q.offset,
-    type: q.type,
-    fromIso: q.from,
-    toIso: q.to,
-    order: q.order,
-  });
+  return {
+    async list(input: unknown) {
+      const data = ListAthleteMeasurementsInput.parse(input);
+      const rows = await repository.list(data);
+      return rows.map((r) => AthleteMeasurementRow.parse(r));
+    },
+
+    async getById(input: unknown) {
+      const data = GetAthleteMeasurementByIdInput.parse(input);
+      const row = await repository.getById(data);
+      return row ? AthleteMeasurementRow.parse(row) : null;
+    },
+
+    async create(input: unknown) {
+      const data = CreateAthleteMeasurementInput.parse(input);
+      const row = await repository.create(data);
+      return AthleteMeasurementRow.parse(row);
+    },
+
+    async update(input: unknown) {
+      const data = UpdateAthleteMeasurementInput.parse(input);
+      const row = await repository.update(data);
+      return AthleteMeasurementRow.parse(row);
+    },
+
+    async delete(input: unknown) {
+      const data = DeleteAthleteMeasurementInput.parse(input);
+      await repository.delete(data);
+    },
+  };
 }
 
-export async function svcCreateAthleteMeasurement(
-  orgId: string,
-  athleteId: string,
-  body: unknown
-) {
-  const dto = parseWith<z.infer<typeof CreateMeasurementDto>>(
-    CreateMeasurementDto,
-    body
-  );
-
-  const exists = await repoMeasurementTypeExists(dto.type);
-  if (!exists)
-    throw new AppError.Validation(`Unknown measurement type: ${dto.type}`);
-
-  return repoInsertMeasurement({
-    orgId,
-    athleteId,
-    measuredAt: dto.measuredAt,
-    type: dto.type,
-    valueNum: dto.valueNum,
-    valueJson: dto.valueJson,
-    source: dto.source,
-    notes: dto.notes,
-  });
-}
-
-export async function svcGetMeasurement(id: string) {
-  return must(await repoGetMeasurementById(id), "Measurement not found");
-}
-
-export async function svcUpdateMeasurement(id: string, body: unknown) {
-  const dto = parseWith<z.infer<typeof UpdateMeasurementDto>>(
-    UpdateMeasurementDto,
-    body
-  );
-
-  if (dto.type) {
-    const exists = await repoMeasurementTypeExists(dto.type);
-    if (!exists)
-      throw new AppError.Validation(`Unknown measurement type: ${dto.type}`);
-  }
-
-  must(await repoGetMeasurementById(id), "Measurement not found");
-
-  const updated = await repoUpdateMeasurementById(id, {
-    measuredAt: dto.measuredAt,
-    type: dto.type,
-    valueNum: dto.valueNum,
-    valueJson: dto.valueJson,
-    source: dto.source,
-    notes: dto.notes,
-  });
-
-  return must(updated, "Measurement not found");
-}
-
-export async function svcDeleteMeasurement(id: string) {
-  must(await repoGetMeasurementById(id), "Measurement not found");
-  await repoDeleteMeasurementById(id);
-  return { ok: true };
-}
+export const athleteMeasurementsService = makeAthleteMeasurementsService(
+  athleteMeasurementsRepository
+);
+export type AthleteMeasurementsService = ReturnType<
+  typeof makeAthleteMeasurementsService
+>;

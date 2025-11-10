@@ -1,4 +1,3 @@
-// shared/errors.ts
 import { NextResponse } from "next/server";
 
 export namespace AppError {
@@ -8,6 +7,7 @@ export namespace AppError {
   export class Validation extends Error {}
   export class Unauthorized extends Error {}
   export class BadRequest extends Error {}
+  export class Internal extends Error {}
 
   export function fromUnknown(err: unknown, fallback = "Unknown error") {
     if (err instanceof Error) return err;
@@ -27,6 +27,8 @@ export namespace AppError {
       return { status: 401, body: { error: err.message } };
     if (err instanceof BadRequest)
       return { status: 400, body: { error: err.message } };
+    if (err instanceof Internal)
+      return { status: 500, body: { error: err.message } };
     if (err instanceof Error)
       return { status: 400, body: { error: err.message } };
     return { status: 500, body: { error: "Unknown Error" } };

@@ -1,86 +1,132 @@
-import { and, eq, ilike, or, isNull } from "drizzle-orm";
-import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import { db } from "@/infrastructure/db/client";
-import { equipment } from "@/infrastructure/db/schema";
+import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { db as defaultDatabase } from "@/infrastructure/db/client";
+import {
+  equipment,
+  type equipment as EquipmentTbl,
+} from "@/infrastructure/db/schema";
+import type { TEquipmentRow } from "./dto";
 
-export type EquipmentRow = InferSelectModel<typeof equipment>;
-export type NewEquipmentRow = InferInsertModel<typeof equipment>;
+export interface EquipmentRepository {
+  list(input: {
+    orgId: string;
+    q?: string;
+    includeInactive?: boolean;
+  }): Promise<TEquipmentRow[]>;
 
-export async function insertEquipment(values: NewEquipmentRow) {
-  const [row] = await db.insert(equipment).values(values).returning();
-  return row!;
+  get(input: {
+    orgId: string;
+    equipmentId: string;
+  }): Promise<TEquipmentRow | null>;
+
+  create(input: {
+    orgId: string;
+    name: string;
+    variant?: string | null;
+    specs?: Record<string, unknown>;
+    isActive?: boolean;
+  }): Promise<TEquipmentRow>;
+
+  update(input: {
+    orgId: string;
+    equipmentId: string;
+    name?: string;
+    variant?: string | null;
+    specs?: Record<string, unknown>;
+    isActive?: boolean;
+  }): Promise<TEquipmentRow>;
+
+  delete(input: { orgId: string; equipmentId: string }): Promise<void>;
 }
 
-export async function getEquipmentById(equipmentId: string) {
-  const rows = await db
-    .select()
-    .from(equipment)
-    .where(eq(equipment.id, equipmentId))
-    .limit(1);
-  return rows[0] ?? null;
+export function makeEquipmentRepository(
+  database = defaultDatabase
+): EquipmentRepository {
+  return {
+    async list({ orgId, q, includeInactive }) {
+      const where = and(
+        eq(equipment.orgId, orgId),
+        includeInactive ? sql`true` : eq(equipment.isActive, true),
+        q
+          ? or(
+              ilike(equipment.name, `%${q}%`),
+              ilike(equipment.variant, `%${q}%`)
+            )
+          : sql`true`
+      );
+
+      const rows = await database
+        .select()
+        .from(equipment)
+        .where(where)
+        .orderBy(equipment.createdAt);
+
+      return rows.map(mapRow);
+    },
+
+    async get({ orgId, equipmentId }) {
+      const [row] = await database
+        .select()
+        .from(equipment)
+        .where(and(eq(equipment.orgId, orgId), eq(equipment.id, equipmentId)))
+        .limit(1);
+
+      return row ? mapRow(row) : null;
+    },
+
+    async create({ orgId, name, variant, specs, isActive }) {
+      const [created] = await database
+        .insert(equipment)
+        .values({
+          orgId,
+          name,
+          variant: variant ?? null,
+          specs: (specs as any) ?? null,
+          isActive: isActive ?? true,
+        })
+        .returning();
+
+      return mapRow(created!);
+    },
+
+    async update({ orgId, equipmentId, name, variant, specs, isActive }) {
+      const [updated] = await database
+        .update(equipment)
+        .set({
+          name: name === undefined ? sql`${equipment.name}` : name,
+          variant:
+            variant === undefined
+              ? sql`${equipment.variant}`
+              : (variant as any),
+          specs: specs === undefined ? sql`${equipment.specs}` : (specs as any),
+          isActive:
+            isActive === undefined ? sql`${equipment.isActive}` : !!isActive,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(equipment.orgId, orgId), eq(equipment.id, equipmentId)))
+        .returning();
+
+      return mapRow(updated!);
+    },
+
+    async delete({ orgId, equipmentId }) {
+      await database
+        .delete(equipment)
+        .where(and(eq(equipment.orgId, orgId), eq(equipment.id, equipmentId)));
+    },
+  };
 }
 
-export async function getEquipmentByOrgNameVariant(
-  orgId: string,
-  name: string,
-  variant?: string | null
-) {
-  const variantCond =
-    variant == null
-      ? isNull(equipment.variant)
-      : eq(equipment.variant, variant);
-
-  const rows = await db
-    .select()
-    .from(equipment)
-    .where(
-      and(eq(equipment.orgId, orgId), eq(equipment.name, name), variantCond)
-    )
-    .limit(1);
-  return rows[0] ?? null;
+function mapRow(r: typeof EquipmentTbl.$inferSelect): TEquipmentRow {
+  return {
+    id: r.id,
+    orgId: r.orgId,
+    name: r.name,
+    variant: r.variant ?? null,
+    specs: (r.specs as any) ?? null,
+    isActive: !!r.isActive,
+    createdAt: String(r.createdAt),
+    updatedAt: String(r.updatedAt),
+  };
 }
 
-export async function updateEquipmentById(
-  equipmentId: string,
-  patch: Partial<EquipmentRow>
-) {
-  const [row] = await db
-    .update(equipment)
-    .set(patch as any)
-    .where(eq(equipment.id, equipmentId))
-    .returning();
-  return row ?? null;
-}
-
-export async function deleteEquipmentById(equipmentId: string) {
-  await db.delete(equipment).where(eq(equipment.id, equipmentId));
-}
-
-export async function listEquipment(opts: {
-  orgId: string;
-  limit: number;
-  offset: number;
-  q?: string;
-  isActive?: boolean;
-}) {
-  const filters = [
-    eq(equipment.orgId, opts.orgId),
-    typeof opts.isActive === "boolean"
-      ? eq(equipment.isActive, opts.isActive)
-      : undefined,
-    opts.q
-      ? or(
-          ilike(equipment.name, `%${opts.q}%`),
-          ilike(equipment.variant, `%${opts.q}%`)
-        )
-      : undefined,
-  ].filter(Boolean) as any[];
-
-  return db
-    .select()
-    .from(equipment)
-    .where(and(...filters))
-    .orderBy(equipment.name, equipment.variant)
-    .limit(opts.limit)
-    .offset(opts.offset);
-}
+export const equipmentRepository = makeEquipmentRepository();

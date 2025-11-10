@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   EnsureUserAccountInput,
   UpsertOrgFromClerkInput,
@@ -13,6 +14,11 @@ import {
   OrgSettingsRow,
 } from "./dto";
 import { orgsRepository, type OrgsRepository } from "./repository";
+
+const isUuid = (s: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    s
+  );
 
 export function makeOrgsService(repository: OrgsRepository) {
   return {
@@ -68,6 +74,18 @@ export function makeOrgsService(repository: OrgsRepository) {
     async removeMember(input: unknown) {
       const data = RemoveMemberInput.parse(input);
       await repository.removeMember(data);
+    },
+
+    async resolveOrgByAnyId(input: {
+      orgIdOrClerkId: string;
+    }): Promise<z.infer<typeof OrgRow> | null> {
+      const { orgIdOrClerkId } = input;
+      if (isUuid(orgIdOrClerkId)) {
+        const row = await repository.getOrgById(orgIdOrClerkId);
+        return row ?? null;
+      }
+      const row = await repository.findByClerkOrgId(orgIdOrClerkId);
+      return row ?? null;
     },
   };
 }
